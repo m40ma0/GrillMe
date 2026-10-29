@@ -19,6 +19,13 @@ pnpm dev
 
 `pnpm dev` runs the web app (http://localhost:3000), the realtime server (:4000) and the job worker (health on :4100). Postgres, Redis and MinIO run on 5432, 6379 and 9000 (console :9001).
 
+MinIO's official image is no longer on Docker Hub, so `docker-compose.yml` pins the last Bitnami MinIO build. If it will not pull, stop that container and use the moto S3 server instead (in memory, so uploads are lost when it stops), which is what CI uses:
+
+```sh
+pip install "moto[server]==5.1.4"
+moto_server -p 9000
+```
+
 The vision service (speech to text, take transcription, the Director render, SAM tracking) needs Python 3.12 and FFmpeg:
 
 ```sh
