@@ -1,0 +1,13 @@
+{
+  "id": "rec-2",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"styles\": [{\"role\": \"technical\", \"questionStyle\": \"Asks how the pipeline is evaluated and for the numbers behind it.\"}, {\"role\": \"impact\", \"questionStyle\": \"Asks who benefits and what measured outcome changed.\"}, {\"role\": \"product\", \"questionStyle\": \"Asks how the product fits an existing workflow.\"}]}"
+      }
+    }
+  ],
+  "usage": { "prompt_tokens": 470, "completion_tokens": 64 }
+}

@@ -1,8 +1,13 @@
 import { defineConfig } from "drizzle-kit";
+import { DbEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
+
+loadRootEnv();
+const env = parseEnv("db", DbEnv);
 
 export default defineConfig({
   schema: "./src/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
-  dbCredentials: { url: process.env.DATABASE_URL ?? "postgres://stage:stage@localhost:5432/stageready" },
+  casing: "snake_case",
+  dbCredentials: { url: env.DATABASE_URL },
 });

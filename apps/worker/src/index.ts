@@ -1,10 +1,85 @@
-import { Queue, Worker } from "bullmq";
+import { createServer } from "node:http";
+import { createAi, MetaModelAdapter, type Ai } from "@stage-ready/ai";
+import { WorkerEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
+import { createDb, projects } from "@stage-ready/db";
+import { JobPayload, QUEUE_NAME, type JobProgress } from "@stage-ready/shared";
+import { Worker, type Job } from "bullmq";
+import { eq } from "drizzle-orm";
 import IORedis from "ioredis";
+import pino from "pino";
+import { eventIngest } from "./jobs/event-ingest";
+import { repoDigest } from "./jobs/repo-digest";
+import { winners } from "./jobs/winners";
+import { UserFacingError, type JobContext } from "./lib/context";
+import { createStorage } from "./lib/s3";
 
-const connection = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", { maxRetriesPerRequest: null });
-const queue = new Queue("stage-ready-jobs", { connection });
-const worker = new Worker("stage-ready-jobs", async (job) => ({ jobId: job.id, status: "accepted" }), { connection });
-worker.on("completed", (job) => console.info(`Job ${job.id} completed.`));
-worker.on("failed", (job, error) => console.error(`Job ${job?.id ?? "unknown"} failed: ${error.message}`));
-console.info("Stage Ready worker is listening.");
-void queue;
+loadRootEnv();
+const env = parseEnv("worker", WorkerEnv);
+const logger = pino({ name: "worker", level: env.LOG_LEVEL });
+const db = createDb(env.DATABASE_URL);
+const storage = createStorage(env);
+const live = createAi(env, logger);
+const mock = createAi(env, logger, { forceMock: true });
+logger.info({ models: live.mode, reason: live.reason }, live.mode === "meta" ? "using the Meta Model API" : "using mocked model adapters");
+if (live.llm instanceof MetaModelAdapter) {
+  const check = await live.llm.verifyModels();
+  logger.info(check.checked ? "configured model IDs confirmed by the model listing" : "the API has no model listing; skipped the model ID check");
+}
+
+const aiFor = async (projectId: string): Promise<Ai> => {
+  const [project] = await db.select({ demoMode: projects.demoMode }).from(projects).where(eq(projects.id, projectId));
+  return project?.demoMode ? mock : live;
+};
+
+const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+
+const worker = new Worker(
+  QUEUE_NAME,
+  async (job: Job) => {
+    const payload = JobPayload.parse({ ...job.data, name: job.name });
+    const ctx: JobContext = {
+      env,
+      db,
+      storage,
+      logger: logger.child({ jobId: job.id, job: job.name, projectId: payload.projectId }),
+      aiFor,
+      progress: (update: JobProgress) => job.updateProgress(update),
+    };
+    try {
+      switch (payload.name) {
+        case "event-ingest":
+          return await eventIngest(payload, ctx);
+        case "winners":
+          return await winners(payload, ctx);
+        case "repo-digest":
+          return await repoDigest(payload, ctx);
+      }
+    } catch (error) {
+      ctx.logger.error({ err: error }, "job failed");
+      if (error instanceof UserFacingError) throw error;
+      throw new Error(`${payload.name} failed: ${(error as Error).message}`);
+    }
+  },
+  { connection, concurrency: 4 },
+);
+worker.on("completed", (job) => logger.info({ jobId: job.id, job: job.name }, "job completed"));
+
+const health = createServer((req, res) => {
+  if (req.url === "/api/health") {
+    res.writeHead(worker.isRunning() ? 200 : 503, { "content-type": "application/json" });
+    res.end(JSON.stringify({ service: "worker", status: worker.isRunning() ? "ok" : "stopped", models: live.mode }));
+    return;
+  }
+  res.writeHead(404).end();
+});
+health.listen(env.WORKER_HEALTH_PORT, () => logger.info(`worker listening on queue ${QUEUE_NAME}; health on :${env.WORKER_HEALTH_PORT}/api/health`));
+
+const shutdown = async () => {
+  await worker.close();
+  health.close();
+  await connection.quit();
+  await db.close();
+  process.exit(0);
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

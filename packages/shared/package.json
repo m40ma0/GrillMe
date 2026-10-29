@@ -1,1 +1,22 @@
-{"name":"@stage-ready/shared","version":"0.1.0","private":true,"type":"module","exports":{".":"./src/index.ts"},"scripts":{"lint":"tsc --noEmit","typecheck":"tsc --noEmit"},"dependencies":{"zod":"^3.24.2"},"devDependencies":{"typescript":"^5.8.3"}}
+{
+  "name": "@stage-ready/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ws-binary": "./src/ws-binary.ts"
+  },
+  "scripts": {
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
