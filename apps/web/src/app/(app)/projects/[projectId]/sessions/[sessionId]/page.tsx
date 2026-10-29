@@ -6,7 +6,7 @@ import { loadSessionReview } from "@/lib/server/sessions";
 
 export const metadata: Metadata = { title: "Session review" };
 
-const MODE: Record<string, string> = { full_pitch: "Full pitch", qa_only: "Q&A only", section_drill: "Section drill" };
+const MODE: Record<string, string> = { full_pitch: "Full pitch", qa_only: "Q&A only", section_drill: "Section drill", demoguard: "DemoGuard run" };
 
 export default async function SessionReviewPage({ params }: { params: Promise<{ projectId: string; sessionId: string }> }) {
   const { sessionId } = await params;

@@ -30,7 +30,7 @@ export async function loadContext(db: Db, sessionId: string, projectId: string):
     .from(sessions)
     .innerJoin(projects, eq(projects.id, sessions.projectId))
     .where(and(eq(sessions.id, sessionId), eq(sessions.projectId, projectId)));
-  if (!row) return null;
+  if (!row || row.session.mode === "demoguard") return null;
   const [spec] = await db.select().from(eventSpecs).where(eq(eventSpecs.projectId, projectId));
   const [personaRows, criteriaRows, sectionRows] = await Promise.all([
     db.select().from(personas).where(eq(personas.projectId, projectId)).orderBy(asc(personas.createdAt)),
@@ -51,7 +51,7 @@ export async function loadContext(db: Db, sessionId: string, projectId: string):
     projectName: row.project.name,
     demoMode: row.project.demoMode,
     eventName: spec?.name || row.project.name,
-    mode: row.session.mode,
+    mode: row.session.mode as SessionContext["mode"],
     difficulty: typeof summary.difficulty === "number" ? summary.difficulty : 3,
     drillSection: (typeof summary.drillSection === "string" ? summary.drillSection : null) as SectionKey | null,
     personas: personaRows.map((p) => ({ id: p.id, role: p.role, questionStyle: p.questionStyle, criteriaWeights: p.criteriaWeights, voicePreset: p.voicePreset })),

@@ -21,6 +21,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: /demoguard\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 1000 },
@@ -30,6 +31,23 @@ export default defineConfig({
             "--use-fake-device-for-media-stream",
             `--use-file-for-fake-audio-capture=${fixtures}/speech-bursts.wav`,
             `--use-file-for-fake-video-capture=${fixtures}/demo-screen.y4m`,
+            "--autoplay-policy=no-user-gesture-required",
+          ],
+        },
+      },
+    },
+    {
+      // DemoGuard watches a different fake screen: a step result, then an injected error dialog.
+      name: "demoguard",
+      testMatch: /demoguard\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1440, height: 1000 },
+        launchOptions: {
+          args: [
+            "--use-fake-ui-for-media-stream",
+            "--use-fake-device-for-media-stream",
+            `--use-file-for-fake-video-capture=${fixtures}/demoguard-screen.y4m`,
             "--autoplay-policy=no-user-gesture-required",
           ],
         },

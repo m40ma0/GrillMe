@@ -1,5 +1,5 @@
-import { createEmbedder, diffWeakSpots, prompts } from "@stage-ready/ai";
-import { claims, coachNotes, criteria, eventSpecs, evidence, judgeTurns, latencySamples, projects, repoFindings, repos, sessions } from "@stage-ready/db";
+import { createEmbedder, diffWeakSpots, heuristicPlan, prompts } from "@stage-ready/ai";
+import { claims, coachNotes, criteria, eventSpecs, evidence, fixTasks, incidents, judgeTurns, latencySamples, projects, repoFindings, repos, sessions, steps } from "@stage-ready/db";
 import { DEFAULT_STEP_BUDGET_MS, formatSeconds, latencySummary, toCoachItems, type CoachItem, type JobPayload, type SessionSummary } from "@stage-ready/shared";
 import { and, asc, cosineDistance, desc, eq, isNotNull, ne } from "drizzle-orm";
 import { UserFacingError, type JobContext } from "../lib/context";
@@ -55,6 +55,7 @@ export async function sessionReview(payload: Payload, ctx: JobContext) {
   if (!session) throw new UserFacingError("Session not found.");
   const [project] = await db.select().from(projects).where(eq(projects.id, payload.projectId));
   if (!project) throw new UserFacingError("Project not found.");
+  if (session.mode === "demoguard") return demoGuardReview(session.id, project.id, ctx);
   const ai = await ctx.aiFor(project.id);
 
   await ctx.progress({ pct: 10, step: "Checking remaining claims against the repo and docs" });
@@ -140,4 +141,57 @@ export async function sessionReview(payload: Payload, ctx: JobContext) {
   await ctx.enqueue({ name: "questions", projectId: project.id, reason: "session" });
   await ctx.progress({ pct: 100, step: "Coach Notes ready" });
   return { coachNoteId: note?.id ?? null, resolved: diff.resolved.length, open: diff.open.length, newIssues: diff.newIssues.length };
+}
+
+/** DemoGuard runs feed Rehearsal Memory: each step that failed live becomes an open weak spot and a Fix Task. */
+async function demoGuardReview(sessionId: string, projectId: string, ctx: JobContext) {
+  const { db } = ctx;
+  await ctx.progress({ pct: 30, step: "Reading DemoGuard incidents" });
+  const rows = await db.select({ incident: incidents, stepName: steps.name }).from(incidents).leftJoin(steps, eq(steps.id, incidents.stepId)).where(eq(incidents.sessionId, sessionId));
+  const failed = rows.filter((r) => r.incident.action === "switch" || r.incident.action === "panic");
+  const byStep = new Map<string, { signals: Set<string>; count: number }>();
+  for (const r of failed) {
+    const name = r.stepName ?? "an unknown step";
+    const entry = byStep.get(name) ?? { signals: new Set<string>(), count: 0 };
+    r.incident.signals.forEach((s) => entry.signals.add(s));
+    entry.count++;
+    byStep.set(name, entry);
+  }
+  const items: CoachItem[] = [...byStep].map(([name, v]) => ({
+    key: `incident:${keyOf(name)}`,
+    text: `Make "${name}" reliable: DemoGuard switched to fallback ${v.count === 1 ? "once" : `${v.count} times`}${v.signals.size ? ` (${[...v.signals].join(", ").replace(/_/g, " ")})` : " (panic)"}.`.slice(
+      0,
+      240,
+    ),
+    severity: "high",
+  }));
+  if (items.length === 0) {
+    await ctx.progress({ pct: 100, step: "No incidents to remember" });
+    return { incidents: 0 };
+  }
+  await ctx.progress({ pct: 70, step: "Adding incidents to Coach Notes and Fix Tasks" });
+  const [latest] = await db.select().from(coachNotes).where(eq(coachNotes.projectId, projectId)).orderBy(desc(coachNotes.createdAt)).limit(1);
+  if (latest) {
+    const known = new Set([...toCoachItems(latest.open), ...toCoachItems(latest.newIssues)].map((i) => i.key));
+    const added = items.filter((i) => !known.has(i.key));
+    if (added.length)
+      await db
+        .update(coachNotes)
+        .set({ newIssues: [...toCoachItems(latest.newIssues), ...added] })
+        .where(eq(coachNotes.id, latest.id));
+  } else {
+    await db.insert(coachNotes).values({ projectId, sessionId, resolved: [], open: [], newIssues: items, nextPlan: heuristicPlan({ resolved: [], open: [], newIssues: items }, []) });
+  }
+  const openTasks = await db
+    .select({ title: fixTasks.title })
+    .from(fixTasks)
+    .where(and(eq(fixTasks.projectId, projectId), eq(fixTasks.origin, "incident"), eq(fixTasks.status, "open")));
+  const have = new Set(openTasks.map((t) => t.title));
+  for (const [name] of byStep) {
+    const title = `Fix the "${name}" step before the live demo`.slice(0, 200);
+    if (have.has(title)) continue;
+    await db.insert(fixTasks).values({ projectId, title, detail: "DemoGuard switched to fallback during this step. See the DemoGuard post-mortem for its signals.", origin: "incident" });
+  }
+  await ctx.progress({ pct: 100, step: "Incidents remembered" });
+  return { incidents: failed.length, steps: byStep.size };
 }

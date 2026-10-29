@@ -13,7 +13,7 @@ import { requireProject } from "@/lib/server/projects";
 
 export const metadata: Metadata = { title: "Sessions" };
 
-const MODE = { full_pitch: "Full pitch", qa_only: "Q&A only", section_drill: "Section drill" } as const;
+const MODE = { full_pitch: "Full pitch", qa_only: "Q&A only", section_drill: "Section drill", demoguard: "DemoGuard run" } as const;
 
 export default async function SessionsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;

@@ -213,3 +213,43 @@ export interface QaKitDTO {
   appendix: boolean;
   gapTasks: number;
 }
+
+// ---------- DemoGuard (F6) ----------
+
+export interface StepDTO {
+  id: string;
+  order: number;
+  name: string;
+  narration: string;
+  maxDurationMs: number;
+  fallbackInMs: number;
+  fallbackOutMs: number;
+  hasExpectedState: boolean;
+  goldenDurationMs: number | null;
+}
+
+export interface IncidentDTO {
+  id: string;
+  atMs: number;
+  action: "switch" | "recover" | "panic" | "resume" | "freeze";
+  stepName: string | null;
+  signals: string[];
+  fallbackMs: number;
+  detectionMs: number | null;
+  detail: string;
+}
+
+export interface DemoGuardRunDTO {
+  sessionId: string;
+  startedAt: string;
+  endedAt: string | null;
+  totalFallbackMs: number;
+  incidents: IncidentDTO[];
+}
+
+export interface DemoGuardDTO {
+  stepMap: { id: string; version: number; goldenRunSessionId: string | null; fallbackClipUrl: string | null; createdAt: string } | null;
+  steps: StepDTO[];
+  goldenRuns: { id: string; startedAt: string; mode: string; steps: number }[];
+  runs: DemoGuardRunDTO[];
+}

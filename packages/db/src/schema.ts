@@ -184,7 +184,7 @@ export const sessions = pgTable(
   {
     id: id(),
     projectId: projectRef(),
-    mode: text({ enum: ["full_pitch", "qa_only", "section_drill"] }).notNull(),
+    mode: text({ enum: ["full_pitch", "qa_only", "section_drill", "demoguard"] }).notNull(),
     startedAt: timestamp({ withTimezone: true }),
     endedAt: timestamp({ withTimezone: true }),
     recordingUrl: text(),
@@ -459,6 +459,9 @@ export const incidents = pgTable("incidents", {
   signals: jsonb().$type<string[]>().notNull().default([]),
   action: text({ enum: ["switch", "recover", "panic", "resume", "freeze"] }).notNull(),
   fallbackMs: integer().notNull().default(0),
+  /** Time from the first frame or request that showed the failure to the switch decision. */
+  detectionMs: integer(),
+  detail: text().notNull().default(""),
   ...timestamps,
 });
 

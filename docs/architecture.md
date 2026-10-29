@@ -42,7 +42,7 @@ flowchart LR
   Q --> M
 ```
 
-Status (M4): web, worker (`event-ingest`, `winners`, `repo-digest`, `session-review`, `questions`, `slides`, `take-process`, `render`), realtime (live sessions with the full Claim Auditor), Postgres, Redis and S3 are live. All model access goes through `packages/ai` (Meta chat-completions adapter, or the mocked adapter when no key is set or the project is in Demo Mode), traced with OpenTelemetry. The vision service serves streaming STT and take transcription (faster-whisper), SAM 3.1 tracking (when a checkpoint is configured), frame hashes and the Director render (FFmpeg). The companion connects in M5.
+Status (M5): web, worker (`event-ingest`, `winners`, `repo-digest`, `session-review`, `questions`, `slides`, `take-process`, `render`), realtime (rehearsals with the full Claim Auditor, and DemoGuard runs), Postgres, Redis and S3 are live. All model access goes through `packages/ai` (Meta chat-completions adapter, or the mocked adapter when no key is set or the project is in Demo Mode), traced with OpenTelemetry. The vision service serves streaming STT and take transcription (faster-whisper), SAM 3.1 tracking (when a checkpoint is configured), frame hashes and the Director render (FFmpeg). The companion (M5) joins DemoGuard runs for network signals, local pre-flight checks and hotkeys.
 
 ## Live rehearsal sequence
 

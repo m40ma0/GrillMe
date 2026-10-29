@@ -1,5 +1,5 @@
 import { scoreTranscribedTake } from "@stage-ready/ai";
-import { criteria, edls, eventSpecs, loadAuditFacts, loadRecentLatency, projects, renderJobs, sectionPlans, takeScores, takes } from "@stage-ready/db";
+import { criteria, edls, eventSpecs, incidents, loadAuditFacts, loadRecentLatency, projects, renderJobs, sectionPlans, takeScores, takes } from "@stage-ready/db";
 import { CARD_MS, CROSSFADE_MS, chapters, takeWeightsFrom, timelineCaptions, timelineMs, toSrt, type JobPayload } from "@stage-ready/shared";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { UserFacingError, type JobContext } from "../lib/context";
@@ -31,13 +31,15 @@ export async function takeProcess(payload: TakePayload, ctx: JobContext) {
     }
     await ctx.progress({ pct: 70, step: "Scoring delivery, coverage, claims and time fit" });
     const [spec] = await ctx.db.select({ id: eventSpecs.id }).from(eventSpecs).where(eq(eventSpecs.projectId, payload.projectId));
-    const [criteriaRows, facts, latency] = await Promise.all([
+    const [criteriaRows, facts, latency, incidentRows] = await Promise.all([
       spec ? ctx.db.select().from(criteria).where(eq(criteria.eventSpecId, spec.id)) : Promise.resolve([]),
       loadAuditFacts(ctx.db, payload.projectId),
       loadRecentLatency(ctx.db, payload.projectId),
+      // DemoGuard incidents in the session the take was cut from lower its demo success.
+      take.sessionId ? ctx.db.select({ action: incidents.action }).from(incidents).where(eq(incidents.sessionId, take.sessionId)) : Promise.resolve([]),
     ]);
     const { contradictedClaims, ...score } = scoreTranscribedTake(
-      { text: transcript.text, words: transcript.words, durationMs, budgetSec: section.budgetSec },
+      { text: transcript.text, words: transcript.words, durationMs, budgetSec: section.budgetSec, incidents: incidentRows.filter((i) => i.action === "switch" || i.action === "panic").length },
       { criteria: criteriaRows.map((c) => ({ id: c.id, name: c.name, description: c.description })), latency, ...facts, weights: takeWeightsFrom(ctx.env.TAKE_SCORE_WEIGHTS) },
     );
     const values = { ...score, breakdown: { ...score.breakdown, contradictedClaims } };

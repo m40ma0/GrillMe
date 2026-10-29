@@ -1,7 +1,7 @@
 import "server-only";
 import { claims, coachNotes, criteria, eventSpecs, evidence, judgeTurns, latencySamples, personas, sectionPlans, sessions, transcriptSegments } from "@stage-ready/db";
 import { PERSONA_ROLE_LABEL, latencySummary, toCoachItems, type SessionSummary } from "@stage-ready/shared";
-import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { SessionReviewDTO, ProgressDTO } from "@/lib/types";
 import { notFound, uuidParam } from "./api";
 import { db } from "./db";
@@ -92,7 +92,7 @@ export async function loadProgress(userId: string, projectId: string): Promise<P
     db()
       .select()
       .from(sessions)
-      .where(and(eq(sessions.projectId, project.id), isNotNull(sessions.endedAt)))
+      .where(and(eq(sessions.projectId, project.id), isNotNull(sessions.endedAt), ne(sessions.mode, "demoguard")))
       .orderBy(asc(sessions.startedAt)),
     db().select().from(coachNotes).where(eq(coachNotes.projectId, project.id)).orderBy(desc(coachNotes.createdAt)),
   ]);

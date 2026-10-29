@@ -2,7 +2,7 @@
 
 Rehearse against honest judges. Present with a safety net.
 
-Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It is built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 (scaffold), M1 (setup and calibration), M2 (Studio core), M3 (auditor complete, review and memory) and M4 (Q&A Kit and Director) are done.**
+Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It is built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 (scaffold), M1 (setup and calibration), M2 (Studio core), M3 (auditor complete, review and memory), M4 (Q&A Kit and Director) and M5 (DemoGuard, without fallback video playback) are done.**
 
 ## Local setup
 
@@ -17,7 +17,16 @@ pnpm db:seed
 pnpm dev
 ```
 
-`pnpm dev` runs the web app (http://localhost:3000), the realtime server (:4000) and the job worker (health on :4100). Postgres, Redis and MinIO run on 5432, 6379 and 9000 (console :9001). Start the vision service with `cd services/vision && python -m uvicorn app.main:app --reload --port 8000`.
+`pnpm dev` runs the web app (http://localhost:3000), the realtime server (:4000) and the job worker (health on :4100). Postgres, Redis and MinIO run on 5432, 6379 and 9000 (console :9001).
+
+The vision service (speech to text, take transcription, the Director render, SAM tracking) needs Python 3.12 and FFmpeg:
+
+```sh
+cd services/vision
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+```
 
 Upgrading from the M0 checkpoint: the schema was rebuilt to the spec, so reset the database once with `docker compose down -v && docker compose up -d && pnpm db:migrate && pnpm db:seed`.
 
@@ -39,6 +48,10 @@ After **Stop**, the session is audited further: features mentioned but not shown
 
 **Director** scores every take (delivery, criteria coverage, contradicted claims, demo success, time fit), assembles the best take per section within the video limit, warns when the Hook does not show your strongest demo moment, and renders the MP4 with crossfades, −14 LUFS, burned captions and chapter cards, plus SRT, thumbnail and chapters. Recording takes needs cloud upload on, the job worker, storage and the vision service (FFmpeg); the Demo Mode project ships 12 fixture takes so you can assemble and render without recording.
 
+### DemoGuard (M5)
+
+Build the **step map** from a golden-run rehearsal (one step per timed step, editable), run **pre-flight** a minute before presenting (Arm unlocks when every critical check passes), and keep **Live control** open while you present: it shows the state (Armed, Live, Suspect, Fallback, Recovering, Frozen), the step, the signal feed and Panic / Resume / Freeze (Shift+P / Shift+R / Shift+F). Open the **cue window** on a second monitor for the current step, next step and narration. The **post-mortem** lists each run's incidents and time on fallback. For network signals and local checks, run the companion (see `docs/companion.md`). Fallback video playback and OBS scene switching are not built yet: DemoGuard decides and records the switch and shows what it would cue.
+
 ## Commands
 
 - `pnpm dev`: web, realtime server and job worker
@@ -46,7 +59,7 @@ After **Stop**, the session is audited further: features mentioned but not shown
 - `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test`, `pnpm build`: workspace checks (CI runs all of them)
 - `pnpm test:e2e`: Playwright in Demo Mode with fake camera and mic (needs FFmpeg; starts `pnpm dev` if it is not running)
 - `cd services/vision && .venv/bin/python -m pytest`: vision service tests
-- `pnpm companion`: the local companion CLI (OBS optional for now)
+- `pnpm companion --url '<from the DemoGuard page>'`: the DemoGuard companion (see `docs/companion.md`)
 
 ## What M1 includes
 

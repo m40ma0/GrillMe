@@ -1,0 +1,15 @@
+{
+  "target": "http://localhost:5173",
+  "proxyPort": 8787,
+  "timeoutMs": 5000,
+  "requiredEnv": ["DEMO_API_URL"],
+  "endpoints": [{ "url": "http://localhost:5173/api/health", "budgetMs": 2000 }],
+  "login": {
+    "url": "http://localhost:5173/api/login",
+    "method": "POST",
+    "headers": { "content-type": "application/json" },
+    "body": "{\"email\":\"demo@example.com\",\"password\":\"demo-password\"}",
+    "expectStatus": 200
+  },
+  "minFreeDiskGb": 5
+}
