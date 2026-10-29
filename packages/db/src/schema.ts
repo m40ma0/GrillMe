@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
-import type { ClaimVerdict, CoachItem, Persona, RepoDigest, SectionKey, WinnerProfile, WinningPattern } from "@stage-ready/shared";
+import type { ClaimVerdict, CoachItem, EdlItem, Persona, RepoDigest, SectionKey, WinnerProfile, WinningPattern } from "@stage-ready/shared";
 
 // Data model from BUILD_PROMPT "Data model". Every table has a uuid v7 id,
 // createdAt and updatedAt; every child table carries projectId for row-level scoping.
@@ -49,6 +49,8 @@ export const projects = pgTable(
     pitchScript: text().notNull().default(""),
     /** The written submission (Devpost text etc.), checked against spoken claims. */
     submissionText: text().notNull().default(""),
+    /** The demo moment the Hook should show (First-20-seconds rule). */
+    strongestMoment: text().notNull().default(""),
     setupStep: integer().notNull().default(0),
     ...timestamps,
   },
@@ -360,6 +362,13 @@ export const takes = pgTable(
     mediaUrl: text(),
     durationMs: integer().notNull(),
     transcriptRef: text(),
+    /** Word-timestamped transcript of the take. */
+    transcript: jsonb().$type<{ text: string; words: { text: string; startMs: number; endMs: number }[] }>(),
+    status: text({ enum: ["uploaded", "processing", "ready", "failed"] })
+      .notNull()
+      .default("ready"),
+    thumbnailUrl: text(),
+    error: text(),
     ...timestamps,
   },
   (t) => [index().on(t.sectionPlanId)],
@@ -386,7 +395,7 @@ export const edls = pgTable("edls", {
   id: id(),
   projectId: projectRef(),
   version: integer().notNull().default(1),
-  items: jsonb().$type<{ takeId: string; inMs: number; outMs: number; transition: string }[]>().notNull().default([]),
+  items: jsonb().$type<EdlItem[]>().notNull().default([]),
   ...timestamps,
 });
 

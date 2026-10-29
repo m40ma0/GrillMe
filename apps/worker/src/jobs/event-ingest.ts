@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { prompts } from "@stage-ready/ai";
-import { criteria, eventSpecs, projects, sectionPlans } from "@stage-ready/db";
+import { criteria, eventSpecs, projects, upsertSectionPlan } from "@stage-ready/db";
 import { autoSectionPlan, enforceEventSpecQuotes, normalizeForMatch, type JobPayload } from "@stage-ready/shared";
 import { and, eq, ne } from "drizzle-orm";
 import { UserFacingError, type JobContext } from "../lib/context";
@@ -94,8 +94,7 @@ export async function eventIngest(payload: Payload, ctx: JobContext) {
       // The section plan is auto-filled from the event's video limit.
       const limit = Math.round(spec.requirements.videoMaxSec);
       await tx.update(projects).set({ videoLimitSec: limit }).where(eq(projects.id, project.id));
-      await tx.delete(sectionPlans).where(eq(sectionPlans.projectId, project.id));
-      await tx.insert(sectionPlans).values(autoSectionPlan(limit).map((s, order) => ({ projectId: project.id, order, ...s })));
+      await upsertSectionPlan(tx, project.id, autoSectionPlan(limit));
     }
     return row.id;
   });

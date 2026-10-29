@@ -54,6 +54,8 @@ const BaseEnv = z
     S3_REGION: z.preprocess(empty, z.string().default("us-east-1")),
     AUTH_SECRET: z.string().min(16, "AUTH_SECRET must be at least 16 characters."),
     LOG_LEVEL: z.preprocess(empty, z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info")),
+    /** Take score weights as JSON, e.g. {"delivery":0.3,"coverage":0.3,"demoSuccess":0.2,"timeFit":0.2,"contradictedPenalty":0.15}. */
+    TAKE_SCORE_WEIGHTS: z.preprocess(empty, z.string().optional()),
   })
   .merge(ModelEnv);
 
@@ -63,6 +65,9 @@ export const WebEnv = BaseEnv.extend({
   DEV_AUTH_BYPASS: z.preprocess(empty, bool.default(false)),
   REALTIME_URL: z.string().url(),
   REALTIME_JWT_SECRET: z.string().min(16),
+  /** Drill answers are transcribed by the vision service. */
+  VISION_SERVICE_URL: optionalUrl,
+  VISION_SERVICE_TOKEN: optionalString,
 }).superRefine((env, ctx) => {
   if (!env.DEV_AUTH_BYPASS && (!env.AUTH_GITHUB_ID || !env.AUTH_GITHUB_SECRET)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["AUTH_GITHUB_ID"], message: "Set AUTH_GITHUB_ID and AUTH_GITHUB_SECRET, or DEV_AUTH_BYPASS=true for local use." });
@@ -74,8 +79,12 @@ export const WebEnv = BaseEnv.extend({
 export type WebEnv = z.infer<typeof WebEnv>;
 
 export const WorkerEnv = BaseEnv.extend({
+  VISION_SERVICE_URL: z.preprocess(empty, z.string().url().optional()),
+  VISION_SERVICE_TOKEN: z.preprocess(empty, z.string().optional()),
   WORKER_HEALTH_PORT: z.preprocess(empty, z.coerce.number().int().default(4100)),
   GITHUB_API_URL: z.preprocess(empty, z.string().url().default("https://api.github.com")),
+  /** x264 preset for Director renders. */
+  FFMPEG_PRESET: z.preprocess(empty, z.enum(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"]).default("veryfast")),
 });
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 

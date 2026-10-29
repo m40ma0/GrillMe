@@ -136,6 +136,8 @@ export async function sessionReview(payload: Payload, ctx: JobContext) {
     .insert(coachNotes)
     .values({ projectId: project.id, sessionId: session.id, resolved: diff.resolved, open: diff.open, newIssues: diff.newIssues, nextPlan: plan.nextPlan, embedding })
     .returning({ id: coachNotes.id });
+  // Auto-refresh: new rehearsal data rebuilds the question bank and its slides.
+  await ctx.enqueue({ name: "questions", projectId: project.id, reason: "session" });
   await ctx.progress({ pct: 100, step: "Coach Notes ready" });
   return { coachNoteId: note?.id ?? null, resolved: diff.resolved.length, open: diff.open.length, newIssues: diff.newIssues.length };
 }

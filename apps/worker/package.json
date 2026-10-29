@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1149.0",
+    "@aws-sdk/s3-request-presigner": "3.1149.0",
     "@opentelemetry/api": "^1.10.0",
+    "@resvg/resvg-js": "2.6.2",
     "@stage-ready/ai": "workspace:*",
     "@stage-ready/config": "workspace:*",
     "@stage-ready/db": "workspace:*",
@@ -21,8 +23,12 @@
     "bullmq": "^5.41.9",
     "drizzle-orm": "^0.41.0",
     "ioredis": "^5.6.0",
+    "pdf-lib": "1.17.1",
     "pino": "^9.6.0",
-    "tar": "^7.5.22"
+    "tar": "^7.5.22",
+    "vega": "6.4.0",
+    "vega-lite": "6.4.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

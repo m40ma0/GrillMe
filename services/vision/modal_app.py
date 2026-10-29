@@ -11,7 +11,7 @@ import modal
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("ffmpeg")
+    .apt_install("ffmpeg", "fonts-dejavu-core")
     .pip_install_from_requirements("requirements.txt")
     .env({"WHISPER_DEVICE": "cuda", "WHISPER_COMPUTE_TYPE": "float16", "WHISPER_MODEL": "small.en", "SAM_DEVICE": "cuda"})
     .add_local_python_source("app")

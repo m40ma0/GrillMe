@@ -15,6 +15,9 @@ export * from "./heuristics";
 export * from "./claims";
 export * from "./coach";
 export * from "./embed";
+export * from "./rules";
+export * from "./takes";
+export * from "./qa";
 export * from "./telemetry";
 
 export interface Ai {

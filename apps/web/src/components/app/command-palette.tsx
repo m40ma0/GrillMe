@@ -1,11 +1,12 @@
 "use client";
-import { FolderPlus, Keyboard, LayoutGrid } from "lucide-react";
+import { FolderPlus, Keyboard, LayoutGrid, Presentation } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PROJECT_NAV, SHORTCUTS } from "./nav";
+import { SlideViewer, useBackupSlides, type BackupSlide } from "./qa-kit/slide-finder";
 
 const isTyping = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
@@ -22,6 +23,8 @@ export function CommandPalette({
 }) {
   const router = useRouter();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [slide, setSlide] = useState<BackupSlide | null>(null);
+  const slides = useBackupSlides(projectId);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -48,6 +51,22 @@ export function CommandPalette({
         <CommandInput placeholder="Type a command or search" />
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
+          {slides.length ? (
+            <CommandGroup heading="Backup slides">
+              {slides.map((s) => (
+                <CommandItem
+                  key={s.id}
+                  value={`slide ${s.question} ${s.title} ${s.id}`}
+                  onSelect={() => {
+                    onOpenChange(false);
+                    setSlide(s);
+                  }}
+                >
+                  <Presentation strokeWidth={1.75} /> <span className="truncate">{s.question}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ) : null}
           {projectId
             ? PROJECT_NAV.map((group) => (
                 <CommandGroup key={group.label} heading={group.label}>
@@ -84,6 +103,7 @@ export function CommandPalette({
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+      <SlideViewer slide={slide} onClose={() => setSlide(null)} />
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
         <DialogContent>
           <DialogHeader>

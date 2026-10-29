@@ -65,8 +65,11 @@ export const WinnerProfile = z.object({
 });
 export type WinnerProfile = z.infer<typeof WinnerProfile>;
 
+export const ANSWER_MAX_WORDS = 55;
+export const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
+
 export const AnswerCard = z.object({
-  script: z.string().refine((s) => s.split(/\s+/).length <= 55, "55 words max"),
+  script: z.string().refine((s) => wordCount(s) <= 55, "55 words max"),
   bridgeLine: z.string().max(120),
   evidenceRefs: z.array(z.string()),
 });

@@ -10,3 +10,5 @@ export { judgeTurnV1, type JudgeCandidate, type JudgeTurnInput, type TurnTrigger
 export { showOrStrikeV1, ShowVerdict, type ShowInput } from "./showOrStrike.v1";
 export { coachNotesV1, CoachPlan } from "./coachNotes.v1";
 export { sessionAuditV1, AuditVerdicts } from "./sessionAudit.v1";
+export { questionBankV1 } from "./questionBank.v1";
+export { slideVerifyV1, SlideReading } from "./slideVerify.v1";

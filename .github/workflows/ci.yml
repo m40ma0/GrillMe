@@ -50,6 +50,20 @@ jobs:
       - run: cp .env.example .env
       - run: pnpm db:migrate && pnpm db:seed
       - run: pnpm --filter @stage-ready/web exec playwright install --with-deps chromium
+      # S3-compatible storage for takes, slides and renders (credentials match .env.example).
+      - run: |
+          docker run -d --name minio -p 9000:9000 -e MINIO_ROOT_USER=stage-ready -e MINIO_ROOT_PASSWORD=stage-ready-secret minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+          for i in $(seq 1 30); do curl -fs http://localhost:9000/minio/health/live && break; sleep 1; done
+      # The vision service renders the Director cut (FFmpeg) and serves transcription.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/vision/requirements.txt
+      - run: pip install -r services/vision/requirements.txt
+      - run: nohup python -m uvicorn app.main:app --port 8000 > /tmp/vision.log 2>&1 &
+        working-directory: services/vision
       - run: pnpm --filter @stage-ready/web test:e2e
         env:
           CI: "true"
@@ -59,6 +73,8 @@ jobs:
           name: playwright-traces
           path: apps/web/test-results
           retention-days: 7
+      - if: failure()
+        run: tail -n 200 /tmp/vision.log || true
 
   vision:
     runs-on: ubuntu-latest

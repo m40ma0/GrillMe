@@ -42,7 +42,7 @@ flowchart LR
   Q --> M
 ```
 
-Status (M3): web, worker (`event-ingest`, `winners`, `repo-digest`, `session-review`), realtime (live sessions with the full Claim Auditor), Postgres, Redis and S3 are live. All model access goes through `packages/ai` (Meta chat-completions adapter, or the mocked adapter when no key is set or the project is in Demo Mode), traced with OpenTelemetry. The vision service serves streaming STT (faster-whisper), SAM 3.1 tracking (when a checkpoint is configured) and frame hashes. The companion connects in M5.
+Status (M4): web, worker (`event-ingest`, `winners`, `repo-digest`, `session-review`, `questions`, `slides`, `take-process`, `render`), realtime (live sessions with the full Claim Auditor), Postgres, Redis and S3 are live. All model access goes through `packages/ai` (Meta chat-completions adapter, or the mocked adapter when no key is set or the project is in Demo Mode), traced with OpenTelemetry. The vision service serves streaming STT and take transcription (faster-whisper), SAM 3.1 tracking (when a checkpoint is configured), frame hashes and the Director render (FFmpeg). The companion connects in M5.
 
 ## Live rehearsal sequence
 
@@ -162,7 +162,9 @@ flowchart TD
   I --> J["Exports: MP4, SRT, thumbnail, chapters"]
 ```
 
-Status: M4.
+Status (M4): live. Takes are scored by the worker (`take-process`), the EDL is built in `packages/shared` (`buildAutoEdl`), and the vision service renders it (`POST /render`). Title cards are deterministic (Pillow) until Muse Image is confirmed; see `docs/decisions/0004-m4-decisions.md`.
+
+Evidence slides: the `questions` job writes the bank and cards, then renders each slide (Vega-Lite → SVG → PNG with resvg), verifies its numbers with Muse Spark against the `dataSnapshot`, falls back to a deterministic template on any mismatch, and rebuilds the PDF appendix.
 
 ## M1 ingestion flow
 

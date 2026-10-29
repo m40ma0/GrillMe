@@ -1,4 +1,18 @@
-import type { CheckResult, ClaimStatus, ComplianceItem, SessionSummary, Persona, RepoFinding, SectionPlanItem, WinnerProfile, WinningPattern } from "@stage-ready/shared";
+import type {
+  CheckResult,
+  ClaimStatus,
+  ComplianceItem,
+  EdlItem,
+  SessionSummary,
+  Persona,
+  PersonaRole,
+  RepoFinding,
+  SectionKey,
+  SectionPlanItem,
+  SlideSnapshot,
+  WinnerProfile,
+  WinningPattern,
+} from "@stage-ready/shared";
 
 // JSON shapes the API returns and server components pass to client components.
 
@@ -13,6 +27,7 @@ export interface ProjectDTO {
   submissionText: string;
   setupStep: number;
   cloudUploadEnabled: boolean;
+  strongestMoment: string;
 }
 
 export interface CriterionDTO {
@@ -126,4 +141,75 @@ export interface ProgressDTO {
   trends: { sessionId: string; label: string; startedAt: string | null; score: number | null; criteria: Record<string, number> }[];
   history: { sessionId: string | null; createdAt: string; resolved: CoachItemDTO[]; open: CoachItemDTO[]; newIssues: CoachItemDTO[] }[];
   nextPlan: string[];
+}
+
+// ---------- Director (F5) ----------
+
+export interface TakeScoreDTO {
+  total: number;
+  delivery: number;
+  coverage: number;
+  claimPenalty: number;
+  demoSuccess: number;
+  timeFit: number;
+  wpm: number;
+  fillerPer100: number;
+  longPauses: number;
+  contradictedClaims: { text: string; reason: string }[];
+}
+
+export interface TakeDTO {
+  id: string;
+  sectionKey: SectionKey;
+  durationMs: number;
+  status: "uploaded" | "processing" | "ready" | "failed";
+  error: string | null;
+  createdAt: string;
+  transcript: string;
+  /** Fixture takes have no recording to preview. */
+  fixture: boolean;
+  hasMedia: boolean;
+  score: TakeScoreDTO | null;
+}
+
+export interface RenderDTO {
+  id: string;
+  status: "queued" | "running" | "done" | "failed";
+  progress: number;
+  error: string | null;
+  createdAt: string;
+  outputs: { mp4: string | null; srt: string | null; thumbnail: string | null; chapters: string | null };
+}
+
+export interface DirectorDTO {
+  limitSec: number;
+  strongestMoment: string;
+  cloudUploadEnabled: boolean;
+  demoMode: boolean;
+  sections: { key: SectionKey; title: string; budgetSec: number; order: number }[];
+  takes: TakeDTO[];
+  edl: { id: string; version: number; items: EdlItem[]; totalMs: number; fits: boolean } | null;
+  firstTwenty: { ok: boolean; matched: string[]; missing: string[] } | null;
+  render: RenderDTO | null;
+}
+
+// ---------- Evidence Q&A Kit (F4) ----------
+
+export interface QuestionDTO {
+  id: string;
+  text: string;
+  personaRole: PersonaRole | null;
+  likelihood: number;
+  damage: number;
+  askedCount: number;
+  lastScore: number | null;
+  sourceRefs: string[];
+  card: { id: string; script: string; bridgeLine: string; evidenceRefs: string[] } | null;
+  slide: { id: string; verification: "passed" | "failed" | "fallback" | null; snapshot: SlideSnapshot; hasPng: boolean } | null;
+}
+
+export interface QaKitDTO {
+  questions: QuestionDTO[];
+  appendix: boolean;
+  gapTasks: number;
 }

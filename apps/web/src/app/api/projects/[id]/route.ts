@@ -1,4 +1,4 @@
-import { projects, sectionPlans } from "@stage-ready/db";
+import { projects, upsertSectionPlan } from "@stage-ready/db";
 import { PatchProjectBody } from "@stage-ready/shared";
 import { eq } from "drizzle-orm";
 import { ApiError, body, route } from "@/lib/server/api";
@@ -17,10 +17,7 @@ export const PATCH = route<{ id: string }>(async (req, { user, params }) => {
         .update(projects)
         .set({ ...fields, setupStep: fields.setupStep === undefined ? undefined : Math.max(project.setupStep, fields.setupStep) })
         .where(eq(projects.id, project.id));
-    if (sectionPlan) {
-      await tx.delete(sectionPlans).where(eq(sectionPlans.projectId, project.id));
-      await tx.insert(sectionPlans).values(sectionPlan.map((s, order) => ({ projectId: project.id, order, ...s })));
-    }
+    if (sectionPlan) await upsertSectionPlan(tx, project.id, sectionPlan);
   });
   return Response.json(await loadBundle(await requireProject(user.id, project.id)));
 });

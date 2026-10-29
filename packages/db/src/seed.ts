@@ -1,7 +1,9 @@
+import { heuristicQuestionBank, scoreTranscribedTake } from "@stage-ready/ai";
 import { and, eq } from "drizzle-orm";
 import { DbEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
 import {
   DEMO_FALLBACK_CLIP,
+  DEMO_STRONGEST_MOMENT,
   DEMO_PROJECT_NAME,
   PERSONA_ROLE_LABEL,
   autoSectionPlan,
@@ -15,9 +17,15 @@ import {
   demoRepo,
   demoSession,
   demoSteps,
+  demoTakeScripts,
   demoTakes,
   demoWinners,
+  buildAutoEdl,
+  latencySummary,
+  spreadWords,
+  takeWeightsFrom,
 } from "@stage-ready/shared";
+import { loadAuditFacts } from "./facts";
 import { createDb, type Db } from "./index";
 import * as t from "./schema";
 
@@ -46,6 +54,7 @@ export async function seedDemoProject(db: Db, ownerId: string): Promise<string> 
         demoMode: true,
         pitchScript: demoPitchScript,
         submissionText: demoSubmissionText,
+        strongestMoment: DEMO_STRONGEST_MOMENT,
         setupStep: 5,
       })
       .returning();
@@ -69,17 +78,20 @@ export async function seedDemoProject(db: Db, ownerId: string): Promise<string> 
       })
       .returning();
     if (!spec) throw new Error("Demo EventSpec could not be created.");
-    await tx.insert(t.criteria).values(
-      demoEventSpec.criteria.map((c, order) => ({
-        projectId,
-        eventSpecId: spec.id,
-        order,
-        name: c.name,
-        description: c.description,
-        weight: c.weight,
-        sourceQuote: demoEventSpec.sourceQuotes[`criteria.${order}`] ?? null,
-      })),
-    );
+    const criteriaRows = await tx
+      .insert(t.criteria)
+      .values(
+        demoEventSpec.criteria.map((c, order) => ({
+          projectId,
+          eventSpecId: spec.id,
+          order,
+          name: c.name,
+          description: c.description,
+          weight: c.weight,
+          sourceQuote: demoEventSpec.sourceQuotes[`criteria.${order}`] ?? null,
+        })),
+      )
+      .returning();
 
     await tx.insert(t.pastWinners).values(demoWinners.map((w) => ({ projectId, sourceUrl: w.sourceUrl, title: w.profile.title, placement: w.profile.placement, profile: w.profile })));
     await tx.insert(t.winningPatterns).values(demoPatterns.map((p) => ({ projectId, ...p })));
@@ -171,10 +183,47 @@ export async function seedDemoProject(db: Db, ownerId: string): Promise<string> 
       })),
     );
 
+    // Twelve fixture takes, two per section, transcribed and scored like recorded ones.
+    const facts = await loadAuditFacts(tx, projectId);
+    const scoring = {
+      criteria: criteriaRows.map((c) => ({ id: c.id, name: c.name, description: c.description })),
+      latency: demoSession.latency.map(([stepKey, durationMs], i) => ({ stepKey, startMs: 40_000 + i * 20_000, durationMs })),
+      ...facts,
+      weights: takeWeightsFrom(process.env.TAKE_SCORE_WEIGHTS),
+    };
+    const candidates = [];
     for (const section of sections) {
-      for (const durationMs of demoTakes[section.key]) {
-        await tx.insert(t.takes).values({ projectId, sectionPlanId: section.id, sessionId: session.id, mediaUrl: `demo/${section.key}-${durationMs}.webm`, durationMs });
+      for (const [i, durationMs] of demoTakes[section.key].entries()) {
+        const text = demoTakeScripts[section.key][i] ?? "";
+        const words = spreadWords(text, durationMs);
+        const [take] = await tx
+          .insert(t.takes)
+          .values({ projectId, sectionPlanId: section.id, sessionId: session.id, mediaUrl: `demo/${section.key}-${i + 1}.webm`, durationMs, transcript: { text, words }, status: "ready" })
+          .returning();
+        if (!take) continue;
+        const { contradictedClaims, ...score } = scoreTranscribedTake({ text, words, durationMs, budgetSec: section.budgetSec }, scoring);
+        await tx.insert(t.takeScores).values({ projectId, takeId: take.id, ...score, breakdown: { ...score.breakdown, contradictedClaims } });
+        candidates.push({ id: take.id, sectionKey: section.key, durationMs, score: score.total, valid: true });
       }
+    }
+    await tx.insert(t.edls).values({ projectId, items: buildAutoEdl(sections, candidates, project.videoLimitSec).items });
+
+    const steps = [...new Set(scoring.latency.map((l) => l.stepKey))];
+    const bank = heuristicQuestionBank({
+      projectName: DEMO_PROJECT_NAME,
+      criteria: demoEventSpec.criteria,
+      claims: demoSession.claims.map((c, i) => ({ text: segments[i]?.text ?? "", type: c.type, status: c.status, evidence: c.evidence.summary })),
+      findings: demoRepo.findings.map((f) => ({ kind: f.kind, summary: f.summary, ref: f.line ? `${f.filePath}:${f.line}` : f.filePath })),
+      personas: demoPersonas.map((p) => ({ role: p.role, questionStyle: p.questionStyle })),
+      weakSpots: [],
+      latency: steps.map((stepKey) => ({ stepKey, ...latencySummary(scoring.latency.filter((l) => l.stepKey === stepKey).map((l) => l.durationMs)) })),
+    });
+    for (const q of bank) {
+      const [question] = await tx
+        .insert(t.questions)
+        .values({ projectId, text: q.text, personaId: q.personaRole ? (personaByRole.get(q.personaRole) ?? null) : null, likelihood: q.likelihood, damage: q.damage, sourceRefs: q.sourceRefs })
+        .returning();
+      if (question) await tx.insert(t.answerCards).values({ projectId, questionId: question.id, ...q.card });
     }
 
     const [stepMap] = await tx.insert(t.stepMaps).values({ projectId, goldenRunSessionId: session.id, fallbackClipUrl: DEMO_FALLBACK_CLIP }).returning();

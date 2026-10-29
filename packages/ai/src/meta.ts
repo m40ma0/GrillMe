@@ -27,6 +27,9 @@ interface ChatResponse {
   usage?: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number };
 }
 
+/** PNG (slides) or JPEG (camera and screen frames), by magic bytes. */
+const dataUrl = (image: Uint8Array) => `data:${image[0] === 0x89 && image[1] === 0x50 ? "image/png" : "image/jpeg"};base64,${Buffer.from(image).toString("base64")}`;
+
 const contentText = (content: string | { type: string; text?: string }[] | null | undefined) => (typeof content === "string" ? content : (content ?? []).map((part) => part.text ?? "").join(""));
 
 export class MetaModelAdapter implements LLM, Vision {
@@ -96,12 +99,7 @@ export class MetaModelAdapter implements LLM, Vision {
       { role: "system", content: `${prompt.system}\n\nReply with a single JSON value that matches this JSON Schema, and nothing else:\n${schemaHint}` },
       {
         role: "user",
-        content: prompt.images?.length
-          ? [
-              { type: "text", text: prompt.user },
-              ...prompt.images.map((jpeg) => ({ type: "image_url" as const, image_url: { url: `data:image/jpeg;base64,${Buffer.from(jpeg).toString("base64")}` } })),
-            ]
-          : prompt.user,
+        content: prompt.images?.length ? [{ type: "text", text: prompt.user }, ...prompt.images.map((image) => ({ type: "image_url" as const, image_url: { url: dataUrl(image) } }))] : prompt.user,
       },
     ];
     const started = performance.now();

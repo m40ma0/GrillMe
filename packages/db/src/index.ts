@@ -4,6 +4,8 @@ import * as schema from "./schema";
 
 export * as schema from "./schema";
 export * from "./schema";
+export { upsertSectionPlan } from "./upsert";
+export { loadAuditFacts, loadRecentLatency } from "./facts";
 
 export function createDb(databaseUrl: string, options: { max?: number } = {}) {
   const client = postgres(databaseUrl, { max: options.max ?? 10 });

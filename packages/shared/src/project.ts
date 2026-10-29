@@ -72,6 +72,7 @@ export const PatchProjectBody = z.object({
   cloudUploadEnabled: z.boolean().optional(),
   sectionPlan: SectionPlanUpdate.optional(),
   setupStep: z.number().int().min(0).max(5).optional(),
+  strongestMoment: z.string().trim().max(300).optional(),
 });
 export type PatchProjectBody = z.infer<typeof PatchProjectBody>;
 
@@ -100,6 +101,10 @@ export const JobPayload = z.discriminatedUnion("name", [
   z.object({ name: z.literal("event-ingest"), projectId: z.string().uuid(), urls: z.array(z.string().url()), text: z.string().optional() }),
   z.object({ name: z.literal("winners"), projectId: z.string().uuid(), urls: z.array(z.string().url()), text: z.string().optional() }),
   z.object({ name: z.literal("session-review"), projectId: z.string().uuid(), sessionId: z.string().uuid() }),
+  z.object({ name: z.literal("take-process"), projectId: z.string().uuid(), takeId: z.string().uuid() }),
+  z.object({ name: z.literal("render"), projectId: z.string().uuid(), renderJobId: z.string().uuid() }),
+  z.object({ name: z.literal("questions"), projectId: z.string().uuid(), reason: z.enum(["manual", "session"]).default("manual") }),
+  z.object({ name: z.literal("slides"), projectId: z.string().uuid(), answerCardIds: z.array(z.string().uuid()).optional() }),
   z.object({ name: z.literal("repo-digest"), projectId: z.string().uuid(), githubFullName: z.string(), ref: z.string().optional(), githubTokenSealed: z.string().optional() }),
 ]);
 export type JobPayload = z.infer<typeof JobPayload>;

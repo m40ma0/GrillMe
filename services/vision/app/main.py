@@ -1,4 +1,4 @@
-"""Stage Ready vision and media service: streaming STT (faster-whisper), SAM 3.1 UI tracking, frame hashes."""
+"""Stage Ready vision and media service: streaming STT (faster-whisper), SAM 3.1 UI tracking, frame hashes, take transcription and the Director render."""
 
 from __future__ import annotations
 
@@ -6,14 +6,18 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict
+import tempfile
 from functools import lru_cache
+from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 from .config import settings
 from .phash import dhash_jpeg
+from .render import Renderer, RenderRequest, fetch
 from .sam_tracker import LABELS, SamTracker
-from .stt import Model, Segmenter, load_model, run_job
+from .stt import Model, Segmenter, load_model, run_job, transcribe_file
 
 log = logging.getLogger("vision")
 app = FastAPI(title="Stage Ready Vision and Media")
@@ -66,6 +70,64 @@ async def track(request: Request, prompts: str = Query(",".join(LABELS)), author
 async def phash(request: Request, authorization: str | None = Header(default=None)) -> dict[str, str]:
     check_token(authorization)
     return {"hash": f"{dhash_jpeg(await request.body()):016x}"}
+
+
+renderer = Renderer()
+
+
+class TranscribeRequest(BaseModel):
+    source: str
+
+
+@app.post("/transcribe")
+async def transcribe(body: TranscribeRequest, authorization: str | None = Header(default=None)) -> dict[str, object]:
+    """Word-timestamped transcript of a recorded take (presigned URL)."""
+    check_token(authorization)
+    try:
+        model = await asyncio.to_thread(whisper)
+    except Exception as error:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"faster-whisper could not load: {error}") from error
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "take"
+        try:
+            await asyncio.to_thread(fetch, body.source, path)
+        except Exception as error:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"Could not download the take: {error}") from error
+        return await asyncio.to_thread(transcribe_file, model, str(path))
+
+
+@app.post("/transcribe/upload")
+async def transcribe_upload(request: Request, authorization: str | None = Header(default=None)) -> dict[str, object]:
+    """Word-timestamped transcript of a short recording sent as the request body (drill answers)."""
+    check_token(authorization)
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty recording.")
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Recordings over 25 MB go through /transcribe with a storage URL.")
+    try:
+        model = await asyncio.to_thread(whisper)
+    except Exception as error:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"faster-whisper could not load: {error}") from error
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "answer"
+        path.write_bytes(data)
+        return await asyncio.to_thread(transcribe_file, model, str(path))
+
+
+@app.post("/render", status_code=202)
+def start_render(body: RenderRequest, authorization: str | None = Header(default=None)) -> dict[str, object]:
+    check_token(authorization)
+    return renderer.submit(body).public()
+
+
+@app.get("/render/{job_id}")
+def render_status(job_id: str, authorization: str | None = Header(default=None)) -> dict[str, object]:
+    check_token(authorization)
+    job = renderer.jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown render job. Render jobs live in one service instance; retry the render.")
+    return job.public()
 
 
 @app.websocket("/stt")

@@ -22,5 +22,6 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
     const parsed = (await response.json().catch(() => null)) as ApiErrorBody | null;
     throw new ApiClientError(response.status, parsed?.error.code ?? "http_error", parsed?.error.message ?? `Request failed with ${response.status}.`, parsed?.error.detail ?? null);
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }

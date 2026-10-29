@@ -2,7 +2,7 @@
 
 Rehearse against honest judges. Present with a safety net.
 
-Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It is built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 (scaffold), M1 (setup and calibration), M2 (Studio core) and M3 (auditor complete, review and memory) are done.**
+Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It is built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 (scaffold), M1 (setup and calibration), M2 (Studio core), M3 (auditor complete, review and memory) and M4 (Q&A Kit and Director) are done.**
 
 ## Local setup
 
@@ -32,6 +32,12 @@ Open a project's **Rehearsal Studio**, pick a mode and difficulty, tick consent 
 ### Session review and progress (M3)
 
 After **Stop**, the session is audited further: features mentioned but not shown are flagged, claims are checked against the repo and the written submission (Calibration → Written submission), and Coach Notes compare the session with earlier ones. Open **Sessions** for the review (summary, claims, rubric heatmap, latency, judge turns, transcript with a captioned player) and **Progress** for trends and the next-session plan. Local recordings are opened from disk in the review; they are never uploaded unless the project opts in.
+
+### Evidence Q&A Kit and Director (M4)
+
+**Q&A Kit** ranks the questions judges are most likely to ask, with a 20-second answer card (55 words or fewer) and an evidence slide per question whose numbers come straight from your data and are checked after rendering. Rebuild it any time; it also rebuilds after each rehearsal. **Start drill** asks random questions (weak ones more often) against a 20-second ring. During real Q&A, press Cmd+K and type a few words of the question to put its backup slide on screen. Export the slides as a PDF appendix.
+
+**Director** scores every take (delivery, criteria coverage, contradicted claims, demo success, time fit), assembles the best take per section within the video limit, warns when the Hook does not show your strongest demo moment, and renders the MP4 with crossfades, −14 LUFS, burned captions and chapter cards, plus SRT, thumbnail and chapters. Recording takes needs cloud upload on, the job worker, storage and the vision service (FFmpeg); the Demo Mode project ships 12 fixture takes so you can assemble and render without recording.
 
 ## Commands
 

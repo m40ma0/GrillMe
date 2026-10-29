@@ -127,3 +127,15 @@ def load_model(name: str, device: str, compute_type: str) -> Model:
     from faster_whisper import WhisperModel
 
     return WhisperModel(name, device=device, compute_type=compute_type)
+
+
+def transcribe_file(model: Model, path: str) -> dict[str, Any]:
+    """Whole-file transcript of a take with word timestamps (ms), in the Director's format."""
+    segments, info = model.transcribe(path, language="en", beam_size=5, word_timestamps=True, vad_filter=True)  # type: ignore[arg-type]
+    words: list[dict[str, Any]] = []
+    texts: list[str] = []
+    for seg in segments:
+        texts.append(seg.text.strip())
+        for w in getattr(seg, "words", None) or []:
+            words.append({"text": w.word.strip(), "startMs": round(w.start * 1000), "endMs": round(w.end * 1000)})
+    return {"text": " ".join(t for t in texts if t).strip(), "words": words, "durationMs": round(float(getattr(info, "duration", 0) or 0) * 1000)}

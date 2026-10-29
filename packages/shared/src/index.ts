@@ -8,3 +8,6 @@ export * from "./demo-fixtures";
 export * from "./time";
 export * from "./stats";
 export * from "./session";
+export * from "./coverage";
+export * from "./director";
+export * from "./qa";

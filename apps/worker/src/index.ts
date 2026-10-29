@@ -4,13 +4,15 @@ import { WorkerEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
 import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb, projects } from "@stage-ready/db";
 import { JobPayload, QUEUE_NAME, cancelKey, type JobProgress } from "@stage-ready/shared";
-import { Worker, type Job } from "bullmq";
+import { Queue, Worker, type Job } from "bullmq";
 import { eq } from "drizzle-orm";
 import IORedis from "ioredis";
 import pino from "pino";
 import { eventIngest } from "./jobs/event-ingest";
 import { repoDigest } from "./jobs/repo-digest";
+import { questionBank, renderSlides } from "./jobs/qa-kit";
 import { sessionReview } from "./jobs/session-review";
+import { render, takeProcess } from "./jobs/takes";
 import { winners } from "./jobs/winners";
 import { UserFacingError, type JobContext } from "./lib/context";
 import { createStorage } from "./lib/s3";
@@ -35,6 +37,7 @@ const aiFor = async (projectId: string): Promise<Ai> => {
 };
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const followUps = new Queue(QUEUE_NAME, { connection, defaultJobOptions: { attempts: 1, removeOnComplete: { age: 86_400, count: 500 }, removeOnFail: { age: 7 * 86_400 } } });
 
 const worker = new Worker(
   QUEUE_NAME,
@@ -51,6 +54,10 @@ const worker = new Worker(
         if (job.id && (await connection.get(cancelKey(job.id)))) throw new UserFacingError("Cancelled.");
         await job.updateProgress(update);
       },
+      enqueue: async (next) => {
+        const { name, ...data } = JobPayload.parse(next);
+        await followUps.add(name, data);
+      },
     };
     try {
       switch (payload.name) {
@@ -62,6 +69,14 @@ const worker = new Worker(
           return await repoDigest(payload, ctx);
         case "session-review":
           return await sessionReview(payload, ctx);
+        case "take-process":
+          return await takeProcess(payload, ctx);
+        case "render":
+          return await render(payload, ctx);
+        case "questions":
+          return await questionBank(payload, ctx);
+        case "slides":
+          return await renderSlides(payload, ctx);
       }
     } catch (error) {
       ctx.logger.error({ err: error }, "job failed");
@@ -85,6 +100,7 @@ health.listen(env.WORKER_HEALTH_PORT, () => logger.info(`worker listening on que
 
 const shutdown = async () => {
   await worker.close();
+  await followUps.close();
   health.close();
   await connection.quit();
   await db.close();

@@ -19,6 +19,7 @@ export const toProjectDTO = (p: ProjectRow): ProjectDTO => ({
   submissionText: p.submissionText,
   setupStep: p.setupStep,
   cloudUploadEnabled: p.cloudUploadEnabled,
+  strongestMoment: p.strongestMoment,
 });
 
 /** Loads a project the user owns, or throws a 404. Every child query is scoped by its projectId. */

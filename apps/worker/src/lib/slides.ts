@@ -1,0 +1,131 @@
+import { Resvg } from "@resvg/resvg-js";
+import { formatValue, type SlideSnapshot } from "@stage-ready/shared";
+import { PDFDocument } from "pdf-lib";
+import * as vega from "vega";
+import * as vl from "vega-lite";
+
+// Evidence slides, rendered deterministically: Vega-Lite → SVG → PNG at 1920×1080. Every number
+// on a slide comes from its dataSnapshot.
+
+export const SLIDE_W = 1920;
+export const SLIDE_H = 1080;
+const FONT = "DejaVu Sans, Inter, Arial, sans-serif";
+const C = { bg: "#0c0e14", fg: "#f5f6fa", muted: "#aab0be", accent: "#818cf8", plate: "#161a24" };
+
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+function wrap(text: string, maxChars: number, maxLines: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/)) {
+    if ((line + " " + word).trim().length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else line = `${line} ${word}`.trim();
+  }
+  if (line) lines.push(line);
+  return lines.length > maxLines
+    ? [
+        ...lines.slice(0, maxLines - 1),
+        `${lines
+          .slice(maxLines - 1)
+          .join(" ")
+          .slice(0, maxChars - 1)}…`,
+      ]
+    : lines;
+}
+
+async function chartSvg(s: SlideSnapshot, width: number, height: number): Promise<string | null> {
+  if (s.chart.kind !== "bar" || s.chart.series.length === 0) return null;
+  const values = s.chart.series.map((p) => ({ label: p.label, value: p.value, text: formatValue(p.value, s.chart.unit) }));
+  const spec = vl.compile({
+    $schema: "https://vega.github.io/schema/vega-lite/v6.json",
+    width,
+    height,
+    background: C.plate,
+    padding: 24,
+    config: {
+      font: FONT,
+      axis: { labelColor: C.muted, titleColor: C.muted, gridColor: "#2a3040", domainColor: "#2a3040", labelFontSize: 22, titleFontSize: 22, labelLimit: 320 },
+      view: { stroke: null },
+    },
+    data: { values },
+    layer: [
+      {
+        mark: { type: "bar", color: C.accent, cornerRadiusEnd: 6 },
+        encoding: { x: { field: "label", type: "nominal", sort: null, title: null, axis: { labelAngle: 0 } }, y: { field: "value", type: "quantitative", title: s.chart.unit || null } },
+      },
+      {
+        mark: { type: "text", dy: -18, fontSize: 30, fontWeight: "bold", color: C.fg },
+        encoding: { x: { field: "label", type: "nominal", sort: null }, y: { field: "value", type: "quantitative" }, text: { field: "text" } },
+      },
+    ],
+  } as vl.TopLevelSpec).spec;
+  const view = new vega.View(vega.parse(spec), { renderer: "none" });
+  const svg = await view.toSVG();
+  view.finalize();
+  return svg;
+}
+
+export interface ComposedSlide {
+  svg: string;
+  /** Every string drawn on the slide, in order (used by the mocked verifier). */
+  text: string[];
+}
+
+/** The evidence slide: title, chart and the key facts. `withChart: false` is the deterministic fallback template. */
+export async function composeSlide(s: SlideSnapshot, options: { withChart: boolean }): Promise<ComposedSlide> {
+  const text: string[] = [];
+  const parts: string[] = [`<rect width="${SLIDE_W}" height="${SLIDE_H}" fill="${C.bg}"/>`, `<rect y="${SLIDE_H - 10}" width="${SLIDE_W}" height="10" fill="${C.accent}"/>`];
+  const title = wrap(s.title, 46, 2);
+  title.forEach((line, i) => parts.push(`<text x="100" y="${150 + i * 76}" font-family="${FONT}" font-size="64" font-weight="bold" fill="${C.fg}">${esc(line)}</text>`));
+  text.push(...title);
+  const subY = 150 + title.length * 76 + 10;
+  parts.push(`<text x="100" y="${subY}" font-family="${FONT}" font-size="34" fill="${C.muted}">${esc(s.subtitle)}</text>`);
+  text.push(s.subtitle);
+
+  const top = subY + 60;
+  const chart = options.withChart ? await chartSvg(s, 1000, 520) : null;
+  const factsX = chart ? 1260 : 100;
+  if (chart) {
+    // Nested inline, not as an <image>: resvg only loads fonts for text in the main document.
+    parts.push(chart.replace(/^<svg /, `<svg x="100" y="${top}" `));
+    text.push(...s.chart.series.map((p) => formatValue(p.value, s.chart.unit)), ...s.chart.series.map((p) => p.label));
+  }
+  // Fallback and chartless slides print the series as large figures instead.
+  const facts = chart ? s.facts : [...s.facts, ...s.chart.series.map((p) => ({ label: p.label, value: formatValue(p.value, s.chart.unit) }))].slice(0, 6);
+  facts.forEach((f, i) => {
+    const col = chart ? 0 : i % 3;
+    const row = chart ? i : Math.floor(i / 3);
+    const x = factsX + col * 580;
+    const y = top + 70 + row * 190;
+    parts.push(`<text x="${x}" y="${y}" font-family="${FONT}" font-size="30" fill="${C.muted}">${esc(f.label)}</text>`);
+    parts.push(`<text x="${x}" y="${y + 84}" font-family="${FONT}" font-size="${f.value.length > 14 ? 40 : 76}" font-weight="bold" fill="${C.fg}">${esc(f.value)}</text>`);
+    text.push(f.label, f.value);
+  });
+  if (facts.length === 0 && !chart) {
+    parts.push(`<text x="100" y="${top + 120}" font-family="${FONT}" font-size="44" fill="${C.muted}">No measured evidence yet. The Fix Task list tracks what would prove it.</text>`);
+  }
+  if (s.sources.length) {
+    const src = `Source: ${s.sources.join(" · ")}`;
+    parts.push(`<text x="100" y="${SLIDE_H - 50}" font-family="${FONT}" font-size="24" fill="${C.muted}">${esc(src)}</text>`);
+    text.push(src);
+  }
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_W}" height="${SLIDE_H}" viewBox="0 0 ${SLIDE_W} ${SLIDE_H}">${parts.join("")}</svg>`, text };
+}
+
+export function svgToPng(svg: string): Uint8Array {
+  return new Resvg(svg, { fitTo: { mode: "width", value: SLIDE_W }, font: { loadSystemFonts: true, defaultFontFamily: "DejaVu Sans" } }).render().asPng();
+}
+
+/** PDF appendix: one 16:9 page per slide PNG. */
+export async function slidesPdf(pngs: Uint8Array[]): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle("Evidence appendix");
+  for (const png of pngs) {
+    const image = await pdf.embedPng(png);
+    const page = pdf.addPage([SLIDE_W / 2, SLIDE_H / 2]);
+    page.drawImage(image, { x: 0, y: 0, width: SLIDE_W / 2, height: SLIDE_H / 2 });
+  }
+  return pdf.save();
+}

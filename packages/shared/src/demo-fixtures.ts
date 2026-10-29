@@ -261,6 +261,43 @@ export const demoSession = {
   ] as const,
 };
 
+/** Words spread evenly over a duration, for fixture transcripts. */
+export function spreadWords(text: string, durationMs: number, leadMs = 300): { text: string; startMs: number; endMs: number }[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const span = Math.max(1, durationMs - 2 * leadMs) / Math.max(1, words.length);
+  return words.map((w, i) => ({ text: w, startMs: Math.round(leadMs + i * span), endMs: Math.round(leadMs + (i + 0.8) * span) }));
+}
+
+export const DEMO_STRONGEST_MOMENT = "Signal Garden turns a messy field report into a response plan.";
+
+/** Two fixture takes per section: the first is the stronger, tighter one; the second has fillers, overruns or a weaker hook. */
+export const demoTakeScripts: Record<SectionKey, [string, string]> = {
+  hook: [
+    "Field teams send hundreds of messy reports a day. Watch Signal Garden turn a messy field report into a response plan, right here, while you watch. Every urgent report gets a plan and an owner.",
+    "Um, so, basically, coordinators have a lot of reports, and, like, it is hard. We built something to help with that, and I think you will really like what it does for teams in the field.",
+  ],
+  problem: [
+    "Coordinators copy reports into spreadsheets by hand. Urgent reports get buried under routine ones, and follow-ups slip through the cracks. In one pilot team, two urgent reports a week waited more than a day before anyone saw them, and nobody knew who owned the next step. That is the problem.",
+    "So the problem is, um, that coordinators have, like, a lot of manual work, basically, with spreadsheets. And it is slow. And reports get lost sometimes. And people are busy. So, yeah, it is a real problem for, um, a lot of teams that we talked to, and they all said the same thing really, that it is hard.",
+  ],
+  demo: [
+    "Here is the report inbox with today's field reports. I select a report about a blocked road near the river. Signal Garden reads it, pulls out the location, urgency and people affected, and generates a response plan. The plan groups this report with two nearby ones, assigns an owner and sets a follow-up time. I compare it with the last incident at the same bridge, then review the checklist the coordinator will send. From raw text to a plan the team can act on, in one screen, with every step visible and editable before anything goes out to the field.",
+    "So this is the inbox. Um, I click here. And, uh, it is loading. Basically it reads the report. Now there is a plan, it is instant. And, like, here are the groups. And here is a comparison. I think it is really useful. And this is the checklist. So that is the demo, and it works really well, and the classifier is 92% accurate, and it also works offline, so teams can use it anywhere they go in the field without any signal.",
+  ],
+  how: [
+    "Under the hood, a language model extracts entities and urgency from each report. Reports are clustered by location, and a rules layer turns each cluster into a plan with an owner and a deadline. A coordinator reviews every plan before it is sent, so a person stays accountable for each follow-up.",
+    "How it works is, um, we use AI. Basically the AI reads it and, like, figures it out. Then there is some clustering and, uh, some rules. And then the plan comes out. It is pretty smart. We used a lot of good libraries. I think that covers how it works, more or less, at a high level.",
+  ],
+  impact: [
+    "In our pilot with two teams, urgent reports were triaged in four minutes instead of twenty five, and no urgent report waited overnight. Coordinators told us they finally trust that nothing is buried. That is time back for responders, and safer outcomes for people in the field.",
+    "The impact is, um, really big. Teams save, like, a lot of time. And it is better for everyone. Basically, it changes how coordinators work, and responders are happier. We think it could help a lot of people all over the world in many different industries.",
+  ],
+  close: [
+    "Signal Garden. Every field report, a plan, an owner and a follow-up. Thank you, we would love your questions.",
+    "So, um, yeah, that is Signal Garden. Thanks for listening, and, uh, basically we hope you liked it and that you will vote for us.",
+  ],
+};
+
 export const demoTakes: Record<SectionKey, [number, number]> = {
   hook: [14_500, 17_000],
   problem: [24_000, 27_500],
