@@ -1,2 +1,7 @@
 fastapi==0.115.12
 uvicorn[standard]==0.34.0
+numpy>=2.1,<2.4
+pillow>=11,<12
+faster-whisper==1.1.1
+requests>=2.32,<3  # faster-whisper downloads models through huggingface_hub, which needs it
+# SAM 3.1 is installed separately (see README): it needs a GPU and Meta's checkpoint access.

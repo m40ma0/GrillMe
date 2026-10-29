@@ -2,6 +2,7 @@ import type { ModelConfig } from "@stage-ready/config";
 import type { Logger } from "pino";
 import { MetaModelAdapter } from "./meta";
 import { MockModelAdapter } from "./mock";
+import { parsePrices } from "./telemetry";
 import { AiError, type LLM } from "./types";
 
 export * from "./types";
@@ -11,6 +12,8 @@ export { MockModelAdapter } from "./mock";
 export * as prompts from "./prompts";
 export type { RepoChunk } from "./prompts";
 export * from "./heuristics";
+export * from "./claims";
+export * from "./telemetry";
 
 export interface Ai {
   llm: LLM;
@@ -36,6 +39,7 @@ export function createAi(config: ModelConfig, logger: Logger, options: { forceMo
       apiKey: config.META_API_KEY,
       models: { spark: config.MODEL_SPARK as string, wonder: config.MODEL_WONDER as string },
       responseFormat: config.META_RESPONSE_FORMAT,
+      prices: parsePrices(config.MODEL_PRICES),
     },
     logger,
   );

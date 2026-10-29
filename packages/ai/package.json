@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.10.0",
     "@stage-ready/config": "workspace:*",
     "@stage-ready/shared": "workspace:*",
     "pino": "^9.6.0",

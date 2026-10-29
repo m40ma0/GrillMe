@@ -25,6 +25,8 @@ export function loadRootEnv(start = process.cwd()): string | null {
 }
 
 const ModelEnv = z.object({
+  /** Optional per-model prices, JSON: {"<model id>": {"inputPerMTok": 0.5, "outputPerMTok": 1.5}}. Without them cost shows as unknown. */
+  MODEL_PRICES: z.preprocess(empty, z.string().optional()),
   META_API_BASE_URL: optionalUrl,
   META_API_KEY: optionalString,
   MODEL_SPARK: optionalString,
@@ -77,12 +79,20 @@ export const WorkerEnv = BaseEnv.extend({
 });
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 
-export const RealtimeEnv = z.object({
-  REDIS_URL: z.string().url(),
-  REALTIME_PORT: z.preprocess(empty, z.coerce.number().int().default(4000)),
-  REALTIME_JWT_SECRET: z.string().min(16),
-  LOG_LEVEL: BaseEnv.shape.LOG_LEVEL,
-});
+export const RealtimeEnv = z
+  .object({
+    NODE_ENV: BaseEnv.shape.NODE_ENV,
+    DATABASE_URL: z.string().url(),
+    REDIS_URL: z.string().url(),
+    REALTIME_PORT: z.preprocess(empty, z.coerce.number().int().default(4000)),
+    REALTIME_JWT_SECRET: z.string().min(16),
+    /** Browser origins allowed to open the WebSocket. */
+    WEB_ORIGIN: z.preprocess(empty, z.string().url().default("http://localhost:3000")),
+    VISION_SERVICE_URL: optionalUrl,
+    VISION_SERVICE_TOKEN: optionalString,
+    LOG_LEVEL: BaseEnv.shape.LOG_LEVEL,
+  })
+  .merge(ModelEnv);
 export type RealtimeEnv = z.infer<typeof RealtimeEnv>;
 
 export const DbEnv = z.object({ DATABASE_URL: z.string().url() });

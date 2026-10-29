@@ -1,12 +1,17 @@
-import { JobProgress, type JobStatus } from "@stage-ready/shared";
+import { JobProgress, cancelKey, type JobStatus } from "@stage-ready/shared";
 import { notFound, route } from "@/lib/server/api";
 import { requireProject } from "@/lib/server/projects";
-import { queue } from "@/lib/server/queue";
+import { queue, redis } from "@/lib/server/queue";
+
+async function ownedJob(userId: string, id: string) {
+  const job = await queue().getJob(id);
+  if (!job) throw notFound("Job");
+  await requireProject(userId, String((job.data as { projectId?: string }).projectId ?? ""));
+  return job;
+}
 
 export const GET = route<{ id: string }>(async (_req, { user, params }) => {
-  const job = await queue().getJob(params.id);
-  if (!job) throw notFound("Job");
-  await requireProject(user.id, String((job.data as { projectId?: string }).projectId ?? ""));
+  const job = await ownedJob(user.id, params.id);
   const state = await job.getState();
   const progress = JobProgress.safeParse(job.progress);
   const status: JobStatus = {
@@ -20,4 +25,19 @@ export const GET = route<{ id: string }>(async (_req, { user, params }) => {
     result: job.returnvalue ?? null,
   };
   return Response.json(status);
+});
+
+/** Cancels a job: waiting jobs are removed; a running job stops at its next progress update. */
+export const DELETE = route<{ id: string }>(async (_req, { user, params }) => {
+  const job = await ownedJob(user.id, params.id);
+  const state = await job.getState();
+  if (state === "waiting" || state === "delayed" || state === "prioritized") {
+    await job.remove();
+    return Response.json({ cancelled: true, state: "removed" });
+  }
+  if (state === "active") {
+    await redis().set(cancelKey(String(job.id)), "1", "EX", 600);
+    return Response.json({ cancelled: true, state: "stopping" });
+  }
+  return Response.json({ cancelled: false, state });
 });

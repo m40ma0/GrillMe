@@ -42,7 +42,7 @@ flowchart LR
   Q --> M
 ```
 
-Status (M1): web (`apps/web`), worker (`apps/worker`: `event-ingest`, `winners`, `repo-digest`), Postgres, Redis and S3 (repo digests) are live. All model access goes through `packages/ai` (Meta chat-completions adapter, or the mocked adapter when no key is set or the project is in Demo Mode). The realtime server validates the WebSocket contract only; sessions arrive in M2. The vision service exposes `/api/health` only.
+Status (M2): web, worker (`event-ingest`, `winners`, `repo-digest`), realtime (live sessions), Postgres, Redis and S3 are live. All model access goes through `packages/ai` (Meta chat-completions adapter, or the mocked adapter when no key is set or the project is in Demo Mode), traced with OpenTelemetry. The vision service serves streaming STT (faster-whisper), SAM 3.1 tracking (when a checkpoint is configured) and frame hashes. The companion connects in M5.
 
 ## Live rehearsal sequence
 
@@ -80,7 +80,7 @@ sequenceDiagram
   RT-->>P: session.summary ready
 ```
 
-Status: M2.
+Status: built in M2 (`apps/realtime/src/session/live-session.ts`). Deterministic rules (`auditor/rules.ts`) run before the verify call; the interruption decision is gated by `judges/policy.ts`. In Demo Mode, STT is the scripted provider.
 
 ## DemoGuard state machine
 

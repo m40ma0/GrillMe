@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import { createAi, MetaModelAdapter, type Ai } from "@stage-ready/ai";
-import { WorkerEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
+import { WorkerEnv, loadRootEnv, parseEnv, startTelemetry } from "@stage-ready/config";
 import { createDb, projects } from "@stage-ready/db";
-import { JobPayload, QUEUE_NAME, type JobProgress } from "@stage-ready/shared";
+import { JobPayload, QUEUE_NAME, cancelKey, type JobProgress } from "@stage-ready/shared";
 import { Worker, type Job } from "bullmq";
 import { eq } from "drizzle-orm";
 import IORedis from "ioredis";
@@ -15,6 +15,7 @@ import { createStorage } from "./lib/s3";
 
 loadRootEnv();
 const env = parseEnv("worker", WorkerEnv);
+await startTelemetry("stage-ready-worker");
 const logger = pino({ name: "worker", level: env.LOG_LEVEL });
 const db = createDb(env.DATABASE_URL);
 const storage = createStorage(env);
@@ -43,7 +44,11 @@ const worker = new Worker(
       storage,
       logger: logger.child({ jobId: job.id, job: job.name, projectId: payload.projectId }),
       aiFor,
-      progress: (update: JobProgress) => job.updateProgress(update),
+      // Cancellation is cooperative: each progress update checks the cancel flag.
+      progress: async (update: JobProgress) => {
+        if (job.id && (await connection.get(cancelKey(job.id)))) throw new UserFacingError("Cancelled.");
+        await job.updateProgress(update);
+      },
     };
     try {
       switch (payload.name) {

@@ -39,3 +39,16 @@ describe("sealed secrets", () => {
     expect(() => openSecret(sealed, "secret-two-long-enough")).toThrow();
   });
 });
+
+describe("session tokens", () => {
+  it("verifies scoped claims and rejects expired or foreign tokens", async () => {
+    const { signSessionToken, verifySessionToken } = await import("../src");
+    const claims = { sid: "01a186d2-229a-7a27-a55c-28567aaf817a", pid: "01a186d2-229a-7a27-a55c-28567aaf817b", uid: "01a186d2-229a-7a27-a55c-28567aaf817c" };
+    const secret = "0123456789abcdef0123";
+    const token = await signSessionToken(claims, secret);
+    await expect(verifySessionToken(token, secret)).resolves.toMatchObject(claims);
+    await expect(verifySessionToken(token, "another-secret-of-length")).rejects.toThrow();
+    const old = await signSessionToken(claims, secret, Date.now() - 16 * 60_000);
+    await expect(verifySessionToken(old, secret)).rejects.toThrow();
+  });
+});

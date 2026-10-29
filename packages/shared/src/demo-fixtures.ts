@@ -272,4 +272,25 @@ export const demoRubricHeatmap: Record<string, Partial<Record<SectionKey, number
   Originality: { hook: 0.6, problem: 0.3, demo: 0.5, how: 0.6, impact: 0.2, close: 0.4 },
 };
 
+/**
+ * Demo Mode speech: the scripted STT replays these lines, one per detected utterance, so a rehearsal
+ * works with no speech model. Pitch first, then answers for the Q&A phase.
+ */
+export const demoRehearsalScript = [
+  "Field teams send hundreds of messy reports every day.",
+  "Signal Garden turns noisy field reports into a clear response plan.",
+  "The summary is instant.",
+  "Our classifier reaches 92% accuracy.",
+  "We use encrypted storage for every report.",
+  "The dashboard groups reports by location so coordinators see clusters.",
+  "Signal Garden supports offline mode.",
+  "Teams can compare the latest incident with previous reports.",
+  "Coordinators triage faster and follow up on every urgent report.",
+  "Signal Garden. Every report, a plan.",
+  "It kind of depends on the team.",
+  "We measured 92% on 200 labelled reports from two pilot teams last month.",
+  "A coordinator reviews every plan before it goes out, so a person owns each follow-up.",
+  "In our pilot, urgent reports were triaged in 4 minutes instead of 25.",
+];
+
 export const DEMO_FALLBACK_CLIP = "demo/fallback-golden-run.webm";

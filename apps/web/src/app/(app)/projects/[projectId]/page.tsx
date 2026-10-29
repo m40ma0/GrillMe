@@ -1,6 +1,7 @@
 import { BookOpenCheck, CircleAlert, Film, Gauge, NotebookPen, ShieldCheck, Video } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CloudUploadToggle } from "@/components/app/cloud-upload-toggle";
 import { ComplianceCard } from "@/components/app/compliance-card";
 import { DeadlineCountdown } from "@/components/app/deadline-countdown";
 import { EmptyState } from "@/components/app/empty-state";
@@ -92,6 +93,7 @@ export default async function ProjectOverview({ params }: { params: Promise<{ pr
                 <Gauge /> Open calibration
               </Link>
             </Button>
+            <CloudUploadToggle projectId={project.id} enabled={project.cloudUploadEnabled} />
           </CardContent>
         </Card>
       </div>

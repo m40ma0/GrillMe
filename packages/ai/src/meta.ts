@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { parseReply } from "./json";
+import { costUsd, traced, type ModelPrices } from "./telemetry";
 import { AiError, type GenerateResult, type LLM, type ModelRole, type Prompt, type Usage, type Vision } from "./types";
 
 // Meta Model API adapter. It speaks the chat-completions protocol
@@ -12,6 +13,7 @@ export interface MetaConfig {
   apiKey: string;
   models: Record<ModelRole, string>;
   responseFormat: "json_schema" | "json_object" | "none";
+  prices?: ModelPrices;
   timeoutMs?: number;
 }
 
@@ -84,6 +86,10 @@ export class MetaModelAdapter implements LLM, Vision {
   }
 
   async generateObject<T>(prompt: Prompt<T>, options: { signal?: AbortSignal } = {}): Promise<GenerateResult<T>> {
+    return traced(prompt, () => this.run(prompt, options));
+  }
+
+  private async run<T>(prompt: Prompt<T>, options: { signal?: AbortSignal }): Promise<GenerateResult<T>> {
     const modelId = this.config.models[prompt.model];
     const schemaHint = JSON.stringify(zodToJsonSchema(prompt.schema, { target: "openAi" }));
     const messages: ChatMessage[] = [
@@ -98,10 +104,11 @@ export class MetaModelAdapter implements LLM, Vision {
       usage.outputTokens = reply.usage.outputTokens === null ? null : (usage.outputTokens ?? 0) + reply.usage.outputTokens;
       const parsed = parseReply(reply.text, prompt.schema);
       const latencyMs = Math.round(performance.now() - started);
-      const log = { prompt: prompt.id, promptVersion: prompt.version, modelId, latencyMs, attempt, ...usage };
+      const cost = costUsd(this.config.prices ?? {}, modelId, usage.inputTokens, usage.outputTokens);
+      const log = { prompt: prompt.id, promptVersion: prompt.version, modelId, latencyMs, attempt, ...usage, costUsd: cost };
       if (parsed.ok) {
         this.logger.info(log, "model call");
-        return { value: parsed.value, modelId, latencyMs, usage, attempts: attempt };
+        return { value: parsed.value, modelId, latencyMs, usage, attempts: attempt, costUsd: cost };
       }
       this.logger.warn({ ...log, validation: parsed.error }, "model output failed validation");
       if (attempt === 2) throw new AiError("parse_failed", `${prompt.id} v${prompt.version} returned output that does not match its schema.`, parsed.error);

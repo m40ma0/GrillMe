@@ -1,0 +1,78 @@
+import type { Db } from "@stage-ready/db";
+import { claims, evidence, fixTasks, judgeTurns, latencySamples, sessions, transcriptSegments } from "@stage-ready/db";
+import type { ClaimStatus, ClaimType, ClaimVerdict, Segment, SessionSummary } from "@stage-ready/shared";
+import { and, eq, inArray } from "drizzle-orm";
+
+export interface SessionRecord {
+  startedAt: Date;
+  endedAt: Date;
+  segments: Segment[];
+  claims: { localId: string; segmentLocalId: string; text: string; type: ClaimType; status: ClaimStatus; verdict: ClaimVerdict }[];
+  latency: { stepKey: string; startMs: number; endMs: number; durationMs: number; detector: string }[];
+  turns: { personaId: string; atMs: number; kind: "interrupt" | "question" | "follow_up"; text: string; trigger: string | null; answerSegmentLocalIds: string[] }[];
+  fixTasks: { title: string; detail: string; suggestedArtifact: string }[];
+  summary: SessionSummary;
+  rubricHeatmap: Record<string, Record<string, number>>;
+}
+
+const TRIGGERS = ["claim", "coverage_gap", "over_time", "vague_answer", "qa_phase"] as const;
+
+/** Writes the whole session in one transaction at session end. */
+export async function persistSession(db: Db, projectId: string, sessionId: string, record: SessionRecord): Promise<void> {
+  await db.transaction(async (tx) => {
+    const segmentIds = new Map<string, string>();
+    if (record.segments.length > 0) {
+      const rows = await tx
+        .insert(transcriptSegments)
+        .values(record.segments.map((s) => ({ projectId, sessionId, startMs: s.startMs, endMs: s.endMs, speaker: s.speaker, text: s.text, words: s.words })))
+        .returning({ id: transcriptSegments.id });
+      record.segments.forEach((s, i) => segmentIds.set(s.id, rows[i]?.id ?? ""));
+    }
+    for (const c of record.claims) {
+      const [row] = await tx
+        .insert(claims)
+        .values({
+          projectId,
+          sessionId,
+          segmentId: segmentIds.get(c.segmentLocalId) || null,
+          text: c.text,
+          type: c.type,
+          status: c.status,
+          confidence: c.verdict.confidence,
+          suggestedRewrite: c.verdict.suggestedRewrite,
+        })
+        .returning({ id: claims.id });
+      if (row && c.verdict.evidence.length > 0)
+        await tx.insert(evidence).values(c.verdict.evidence.map((e) => ({ projectId, claimId: row.id, kind: e.kind, ref: { value: e.ref }, summary: e.summary })));
+    }
+    if (record.latency.length > 0) await tx.insert(latencySamples).values(record.latency.map((l) => ({ projectId, sessionId, ...l })));
+    if (record.turns.length > 0) {
+      await tx.insert(judgeTurns).values(
+        record.turns.map((t) => ({
+          projectId,
+          sessionId,
+          personaId: t.personaId,
+          atMs: t.atMs,
+          kind: t.kind,
+          text: t.text,
+          trigger: TRIGGERS.find((x) => x === t.trigger) ?? null,
+          presenterAnswerSegmentIds: t.answerSegmentLocalIds.map((id) => segmentIds.get(id)).filter((id): id is string => Boolean(id)),
+        })),
+      );
+    }
+    if (record.fixTasks.length > 0) {
+      const titles = record.fixTasks.map((f) => f.title);
+      const existing = await tx
+        .select({ title: fixTasks.title })
+        .from(fixTasks)
+        .where(and(eq(fixTasks.projectId, projectId), inArray(fixTasks.title, titles)));
+      const fresh = record.fixTasks.filter((f) => !existing.some((e) => e.title === f.title));
+      if (fresh.length > 0) await tx.insert(fixTasks).values(fresh.map((f) => ({ projectId, origin: "claim" as const, ...f })));
+    }
+    const [current] = await tx.select({ summary: sessions.summary }).from(sessions).where(eq(sessions.id, sessionId));
+    await tx
+      .update(sessions)
+      .set({ startedAt: record.startedAt, endedAt: record.endedAt, summary: { ...(current?.summary ?? {}), ...record.summary }, rubricHeatmap: record.rubricHeatmap })
+      .where(eq(sessions.id, sessionId));
+  });
+}

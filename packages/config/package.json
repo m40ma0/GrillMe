@@ -12,6 +12,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.206.0",
+    "@opentelemetry/sdk-node": "^0.206.0",
+    "@stage-ready/shared": "workspace:*",
+    "jose": "^6.2.13",
     "zod": "^3.25.76"
   },
   "devDependencies": {

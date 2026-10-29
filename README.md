@@ -2,7 +2,7 @@
 
 Rehearse against honest judges. Present with a safety net.
 
-Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It is built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 (scaffold) and M1 (setup and calibration) are done.**
+Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It is built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 (scaffold), M1 (setup and calibration) and M2 (Studio core) are done.**
 
 ## Local setup
 
@@ -25,11 +25,17 @@ Upgrading from the M0 checkpoint: the schema was rebuilt to the spec, so reset t
 
 With `META_API_KEY` empty, every service runs on mocked model adapters and Demo Mode works with no keys. To use the Meta Model API, fill `META_API_BASE_URL`, `META_API_KEY`, `MODEL_SPARK`, `MODEL_WONDER` (and the rest) from the official docs, and set `META_RESPONSE_FORMAT` to the JSON mode the API supports. The worker checks the configured IDs against the API's model listing at startup.
 
+### Rehearsal Studio (M2)
+
+Open a project's **Rehearsal Studio**, pick a mode and difficulty, tick consent and press **Start rehearsal** (Cmd+Enter). Demo Mode projects work with no services beyond `pnpm dev`: speech is scripted. Real projects need speech to text: run the vision service (above) and set `VISION_SERVICE_URL`. Use headphones so the judges' voices are not picked up by your mic. Cmd+. asks the speaking judge to yield; Cmd+Shift+L toggles the dev latency HUD.
+
 ## Commands
 
 - `pnpm dev`: web, realtime server and job worker
 - `pnpm db:generate`, `pnpm db:migrate`, `pnpm db:seed`: Drizzle migrations and the fictional Signal Garden Demo Mode project
 - `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test`, `pnpm build`: workspace checks (CI runs all of them)
+- `pnpm test:e2e`: Playwright in Demo Mode with fake camera and mic (needs FFmpeg; starts `pnpm dev` if it is not running)
+- `cd services/vision && .venv/bin/python -m pytest`: vision service tests
 - `pnpm companion`: the local companion CLI (OBS optional for now)
 
 ## What M1 includes

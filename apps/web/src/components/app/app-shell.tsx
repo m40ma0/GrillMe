@@ -122,7 +122,8 @@ export function AppShell({ user, projects, defaultOpen, children }: { user: Shel
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" tooltip={user.name ?? user.email} asChild>
-                <a href={user.bypass ? "#" : "/api/auth/signout"} aria-label={user.bypass ? "Local developer (dev auth bypass)" : "Sign out"}>
+                {/* With the dev bypass there is no account to sign out of, so this is just a label. */}
+                <a {...(user.bypass ? { role: "presentation" } : { href: "/api/auth/signout" })}>
                   <span className="bg-persona-2/15 text-foreground ring-persona-2 ring-1 flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                     {initials(user.name ?? user.email)}
                   </span>
@@ -196,7 +197,7 @@ export function AppShell({ user, projects, defaultOpen, children }: { user: Shel
           {current?.demoMode ? <Badge variant="outline">Demo Mode</Badge> : null}
           <div className="ml-auto flex items-center gap-2">
             {current ? <DeadlineCountdown deadlineIso={current.deadlineIso} timezone={current.timezone} className="text-muted-foreground hidden text-xs lg:inline-flex" /> : null}
-            <Button variant="outline" size="sm" className="text-muted-foreground" onClick={() => setPaletteOpen(true)} aria-label="Open command palette (Cmd+K)">
+            <Button variant="outline" size="sm" className="text-muted-foreground" onClick={() => setPaletteOpen(true)} title="Search (Cmd+K)">
               <Command size={16} strokeWidth={1.75} aria-hidden />
               <span className="hidden sm:inline">Search</span>
               <kbd className="bg-muted hidden rounded px-1.5 font-mono text-[11px] sm:inline">⌘K</kbd>

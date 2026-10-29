@@ -90,6 +90,9 @@ export type JobProgress = z.infer<typeof JobProgress>;
 
 export const QueuedJob = z.object({ jobId: z.string() });
 
+/** Redis key a running job polls at each progress update; set by DELETE /api/jobs/:id. */
+export const cancelKey = (jobId: string) => `stage-ready:cancel:${jobId}`;
+
 /** Queue names and job payloads shared by the web app and the worker. */
 export const QUEUE_NAME = "stage-ready-jobs";
 export const JobPayload = z.discriminatedUnion("name", [

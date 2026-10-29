@@ -3,7 +3,7 @@ import * as React from "react";
 import { Slider as SliderPrimitive } from "radix-ui";
 import { cn } from "@/lib/utils";
 
-function Slider({ className, defaultValue, value, min = 0, max = 100, ...props }: React.ComponentProps<typeof SliderPrimitive.Root>) {
+function Slider({ className, defaultValue, value, min = 0, max = 100, "aria-label": ariaLabel, ...props }: React.ComponentProps<typeof SliderPrimitive.Root>) {
   const values = React.useMemo(() => (Array.isArray(value) ? value : Array.isArray(defaultValue) ? defaultValue : [min, max]), [value, defaultValue, min, max]);
   return (
     <SliderPrimitive.Root
@@ -22,7 +22,8 @@ function Slider({ className, defaultValue, value, min = 0, max = 100, ...props }
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
-          aria-label={props["aria-label"]}
+          // The label belongs on the thumb (role="slider"), not the root span.
+          aria-label={ariaLabel}
           className="border-primary bg-background ring-primary/50 block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}

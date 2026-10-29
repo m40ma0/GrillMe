@@ -30,6 +30,8 @@ export interface GenerateResult<T> {
   latencyMs: number;
   usage: Usage;
   attempts: number;
+  /** null when MODEL_PRICES has no entry for the model. */
+  costUsd: number | null;
 }
 
 export interface LLM {
