@@ -1,0 +1,21 @@
+{
+  "name": "stage-ready",
+  "private": true,
+  "packageManager": "pnpm@11.14.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "db:generate": "pnpm --filter @stage-ready/db db:generate",
+    "db:migrate": "pnpm --filter @stage-ready/db db:migrate",
+    "db:seed": "pnpm --filter @stage-ready/db db:seed",
+    "companion": "pnpm --filter @stage-ready/companion start"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.3"
+  }
+}

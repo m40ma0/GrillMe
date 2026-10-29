@@ -1,0 +1,23 @@
+import Link from "next/link";
+import { Activity, ArrowUpRight, BookOpenCheck, CalendarClock, ChevronDown, CircleHelp, Command, Film, Gauge, LayoutDashboard, ListChecks, Settings2, ShieldCheck, Sparkles, Video } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import type { LucideIcon } from "lucide-react";
+
+const navigation: { label: string; items: { label: string; href: string; icon: LucideIcon }[] }[] = [
+  { label: "Workspace", items: [{ label: "Projects", href: "/projects", icon: LayoutDashboard }, { label: "Calibration", href: "/calibration", icon: Gauge }, { label: "Q&A Kit", href: "/qa-kit", icon: BookOpenCheck }, { label: "Progress", href: "/progress", icon: Activity }] },
+  { label: "Presentation", items: [{ label: "Rehearsal Studio", href: "/rehearse", icon: Video }, { label: "Session review", href: "/sessions/demo-session", icon: ListChecks }, { label: "Director", href: "/director", icon: Film }, { label: "DemoGuard", href: "/demoguard", icon: ShieldCheck }] },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return <div className="min-h-screen bg-background text-foreground">
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 flex-col border-r bg-card lg:flex">
+      <Link href="/" className="flex h-16 items-center gap-3 border-b px-5"><div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Sparkles size={17}/></div><div><div className="font-semibold tracking-tight">Stage Ready</div><div className="text-xs text-muted-foreground">Rehearsal workspace</div></div></Link>
+      <div className="border-b p-3"><button className="flex w-full items-center gap-3 rounded-lg border bg-background p-3 text-left hover:bg-accent" aria-label="Switch project"><div className="flex size-8 items-center justify-center rounded-md bg-teal-500/15 text-xs font-semibold text-teal-500">SG</div><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">Signal Garden</div><div className="truncate text-xs text-muted-foreground">Global AI Builder Showcase</div></div><ChevronDown size={15} className="text-muted-foreground"/></button></div>
+      <nav className="flex-1 space-y-6 overflow-y-auto p-3" aria-label="Main navigation">{navigation.map((group)=><div key={group.label}><div className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{group.label}</div><div className="space-y-1">{group.items.map(({label,href,icon:Icon})=><Link key={label} href={href} className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"><Icon size={17} strokeWidth={1.75}/>{label}</Link>)}</div></div>)}</nav>
+      <div className="border-t p-3"><Link href="/settings" className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent"><Settings2 size={17}/>Settings</Link><div className="mt-2 flex items-center gap-3 rounded-lg border p-3"><div className="flex size-8 items-center justify-center rounded-full bg-violet-500/15 text-xs font-semibold text-violet-400">LA</div><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">Local workspace</div><div className="truncate text-xs text-muted-foreground">Demo Mode</div></div><CircleHelp size={16} className="text-muted-foreground"/></div></div>
+    </aside>
+    <div className="lg:pl-64"><header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/95 px-4 backdrop-blur md:px-6"><div className="flex items-center gap-2 text-sm text-muted-foreground"><span className="hidden sm:inline">Signal Garden</span><span className="hidden sm:inline">/</span><span className="text-foreground">Workspace</span></div><div className="flex items-center gap-2"><div className="hidden items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-muted-foreground md:flex"><CalendarClock size={14}/>Deadline in 6 days</div><Button variant="outline" size="sm" className="hidden text-muted-foreground sm:inline-flex"><Command size={14}/>Search</Button><ThemeToggle/><Button variant="ghost" size="icon" aria-label="Help"><CircleHelp size={17}/></Button></div></header>
+    <main className="mx-auto max-w-7xl p-4 md:p-6">{children}</main><footer className="flex items-center justify-between border-t px-6 py-4 text-xs text-muted-foreground"><span>Stage Ready · Demo Mode</span><span className="inline-flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-emerald-500"/>All local services ready <ArrowUpRight size={12}/></span></footer></div>
+  </div>;
+}
