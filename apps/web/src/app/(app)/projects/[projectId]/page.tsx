@@ -24,7 +24,7 @@ export default async function ProjectOverview({ params }: { params: Promise<{ pr
   const heatmap = extras.latestSession?.rubricHeatmap ?? null;
   const readiness = bundle.eventSpec?.criteria.map((c) => {
     const cells = Object.values(heatmap?.[c.name] ?? {}).filter((v): v is number => typeof v === "number");
-    return { criterion: c.name, readiness: cells.length ? Math.round((cells.reduce((a, b) => a + b, 0) / cells.length) * 100) : 0 };
+    return { criterion: c.name, readiness: Math.round((cells.reduce((a, b) => a + b, 0) / Math.max(cells.length, 6)) * 100) };
   });
   const base = `/projects/${project.id}`;
 

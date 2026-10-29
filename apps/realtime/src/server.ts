@@ -1,11 +1,14 @@
 import websocket from "@fastify/websocket";
 import { createAi } from "@stage-ready/ai";
-import { RealtimeEnv, loadRootEnv, parseEnv, startTelemetry, verifySessionToken } from "@stage-ready/config";
+import { RealtimeEnv, loadRootEnv, parseEnv, verifySessionToken } from "@stage-ready/config";
+import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb } from "@stage-ready/db";
-import { ClientMessage, type ServerMessage } from "@stage-ready/shared";
+import { ClientMessage, QUEUE_NAME, type ServerMessage } from "@stage-ready/shared";
 import { BinaryKind, decodeBinary, splitFramePayload } from "@stage-ready/shared/ws-binary";
 import pino from "pino";
+import { Queue } from "bullmq";
 import Fastify from "fastify";
+import IORedis from "ioredis";
 import { loadContext } from "./session/context";
 import { LiveSession } from "./session/live-session";
 import { VisionTracker } from "./vision/tracker";
@@ -24,6 +27,10 @@ const db = createDb(env.DATABASE_URL);
 const live = createAi(env, logger);
 const mock = createAi(env, logger, { forceMock: true });
 app.log.info({ models: live.mode, reason: live.reason }, "model adapters ready");
+// After each session the worker writes Coach Notes (Rehearsal Memory).
+const jobs = new Queue(QUEUE_NAME, { connection: new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null }), defaultJobOptions: { attempts: 2, removeOnComplete: { age: 86_400 } } });
+const onEnded = (projectId: string, sessionId: string) =>
+  void jobs.add("session-review", { projectId, sessionId }).catch((error: unknown) => logger.error({ err: error }, "could not queue the session review"));
 
 /** Live sessions survive a dropped connection for two minutes so the browser can reconnect and re-sync. */
 const RECONNECT_GRACE_MS = 120_000;
@@ -68,6 +75,7 @@ app.get("/ws", { websocket: true }, async (socket, req) => {
       visionUrl: env.VISION_SERVICE_URL,
       visionToken: env.VISION_SERVICE_TOKEN,
       speechModelConfigured: Boolean(env.MODEL_STT),
+      onEnded,
     });
     entry = { session, expiry: null };
     sessions.set(claims.sid, entry);

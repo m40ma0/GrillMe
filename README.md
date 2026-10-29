@@ -2,7 +2,7 @@
 
 Rehearse against honest judges. Present with a safety net.
 
-Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It is built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 (scaffold), M1 (setup and calibration) and M2 (Studio core) are done.**
+Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It is built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 (scaffold), M1 (setup and calibration), M2 (Studio core) and M3 (auditor complete, review and memory) are done.**
 
 ## Local setup
 
@@ -28,6 +28,10 @@ With `META_API_KEY` empty, every service runs on mocked model adapters and Demo 
 ### Rehearsal Studio (M2)
 
 Open a project's **Rehearsal Studio**, pick a mode and difficulty, tick consent and press **Start rehearsal** (Cmd+Enter). Demo Mode projects work with no services beyond `pnpm dev`: speech is scripted. Real projects need speech to text: run the vision service (above) and set `VISION_SERVICE_URL`. Use headphones so the judges' voices are not picked up by your mic. Cmd+. asks the speaking judge to yield; Cmd+Shift+L toggles the dev latency HUD.
+
+### Session review and progress (M3)
+
+After **Stop**, the session is audited further: features mentioned but not shown are flagged, claims are checked against the repo and the written submission (Calibration → Written submission), and Coach Notes compare the session with earlier ones. Open **Sessions** for the review (summary, claims, rubric heatmap, latency, judge turns, transcript with a captioned player) and **Progress** for trends and the next-session plan. Local recordings are opened from disk in the review; they are never uploaded unless the project opts in.
 
 ## Commands
 

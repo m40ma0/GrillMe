@@ -99,6 +99,8 @@ describe("deterministic claim rules", () => {
       dependencies: [],
       capabilities: [],
       evalFiles: [],
+      todos: [],
+      mocks: [],
     });
     expect(r?.verdict.status).toBe("unverified");
     expect(r?.fixTask?.suggestedArtifact).toMatch(/eval/);
@@ -108,6 +110,8 @@ describe("deterministic claim rules", () => {
       dependencies: ["next", "zod"],
       capabilities: [],
       evalFiles: [],
+      todos: [],
+      mocks: [],
     });
     expect(r?.verdict).toMatchObject({ status: "unverified", evidence: [{ kind: "repo", ref: "package.json" }] });
     expect(
@@ -115,6 +119,8 @@ describe("deterministic claim rules", () => {
         dependencies: ["libsodium-wrappers"],
         capabilities: [],
         evalFiles: [],
+        todos: [],
+        mocks: [],
       }),
     ).toBeNull();
   });
@@ -176,5 +182,72 @@ describe("judge policy for feature claims", () => {
     };
     expect(candidates(input)).toEqual([]);
     expect(candidates({ ...input, difficulty: 5 })).toHaveLength(1);
+  });
+});
+
+describe("repo truth and cross-source checks", () => {
+  const repo = {
+    dependencies: ["next"],
+    capabilities: [],
+    evalFiles: [],
+    todos: [{ summary: "TODO: implement offline queue (claimed in the pitch).", ref: "src/offline.ts:3" }],
+    mocks: [{ summary: "Returns a hard-coded confidence of 0.92 on the demo path.", ref: "src/classifier.ts:41" }],
+  };
+  const claim = (text: string, type: "feature" | "accuracy" | "market") => ({ text, type, quantity: null, featureName: null, segmentStartMs: 0 });
+  it("contradicts a feature whose code is still a TODO, citing file:line", () => {
+    expect(verifyDeterministic(claim("Signal Garden supports offline mode.", "feature"), [], repo)?.verdict).toMatchObject({
+      status: "contradicted",
+      evidence: [{ kind: "repo", ref: "src/offline.ts:3" }],
+    });
+  });
+  it("contradicts a number that is hard-coded on the demo path", () => {
+    const r = verifyDeterministic(claim("Our classifier reaches 92% accuracy.", "accuracy"), [], repo);
+    expect(r?.verdict).toMatchObject({ status: "contradicted", evidence: [{ ref: "src/classifier.ts:41" }] });
+    expect(r?.fixTask?.title).toMatch(/hard-coded/);
+  });
+  it("flags a spoken number that disagrees with the README", () => {
+    const r = verifyDeterministic(claim("Our classifier reaches 92% accuracy.", "accuracy"), [], null, { readme: "# Demo\nThe classifier reaches 89% accuracy on our test set.", submission: null });
+    expect(r?.verdict).toMatchObject({ status: "contradicted", evidence: [{ kind: "doc", ref: "README.md" }] });
+  });
+  it("flags a feature the submission lists as planned", () => {
+    const r = verifyDeterministic(claim("It exports reports to PDF.", "feature"), [], null, { readme: null, submission: "PDF export is coming soon." });
+    expect(r?.verdict.status).toBe("contradicted");
+  });
+  it("leaves unrelated claims alone", () => {
+    expect(verifyDeterministic(claim("The dashboard groups reports by location.", "feature"), [], repo)).toBeNull();
+  });
+});
+
+describe("canned-response detector", async () => {
+  const { detectCanned, fineHash, hexHamming } = await import("../src/auditor/canned");
+  const jpegjs = (await import("jpeg-js")).default;
+  const frame = (box: [number, number, number, number] | null) => {
+    const width = 160,
+      height = 90,
+      data = Buffer.alloc(width * height * 4, 255);
+    if (box) for (let y = box[1]; y < box[3]; y++) for (let x = box[0]; x < box[2]; x++) data.fill(0, (y * width + x) * 4, (y * width + x) * 4 + 3);
+    return new Uint8Array(jpegjs.encode({ data, width, height }, 90).data);
+  };
+  it("hashes JPEGs so different screens differ and identical ones match", () => {
+    const a = fineHash(frame([10, 10, 60, 40]))!;
+    expect(hexHamming(a, fineHash(frame([10, 10, 60, 40]))!)).toBe(0);
+    expect(hexHamming(a, fineHash(frame([90, 50, 150, 80]))!)).toBeGreaterThan(12);
+  });
+  it("flags identical outputs for different inputs, and not identical inputs", () => {
+    const inA = fineHash(frame([10, 10, 60, 40]))!;
+    const inB = fineHash(frame([90, 50, 150, 80]))!;
+    const out = fineHash(frame([0, 0, 160, 30]))!;
+    expect(
+      detectCanned([
+        { sessionId: "s1", stepKey: "demo:1", startMs: 5000, inputHash: inA, outputHash: out },
+        { sessionId: "s2", stepKey: "demo:1", startMs: 6000, inputHash: inB, outputHash: out },
+      ]),
+    ).toHaveLength(1);
+    expect(
+      detectCanned([
+        { sessionId: "s1", stepKey: "demo:1", startMs: 5000, inputHash: inA, outputHash: out },
+        { sessionId: "s2", stepKey: "demo:1", startMs: 6000, inputHash: inA, outputHash: out },
+      ]),
+    ).toHaveLength(0);
   });
 });

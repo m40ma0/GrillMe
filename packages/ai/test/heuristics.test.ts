@@ -48,3 +48,23 @@ describe("heuristic event extraction", () => {
     expect(winners[0]).toMatchObject({ title: "Mossline", placement: "1st place", inputType: "noisy soil readings", outputType: "an irrigation plan", strongestMomentSec: 42, domain: "unknown" });
   });
 });
+
+describe("coach notes diff", async () => {
+  const { diffWeakSpots, heuristicPlan } = await import("../src");
+  it("finds resolved, open and new weak spots by key, and always plans three items", () => {
+    const prev = [
+      { key: "a", text: "A", severity: "high" as const },
+      { key: "b", text: "B", severity: "medium" as const },
+    ];
+    const now = [
+      { key: "b", text: "B again", severity: "medium" as const },
+      { key: "c", text: "C", severity: "high" as const },
+    ];
+    const diff = diffWeakSpots(prev, now);
+    expect(diff.resolved.map((i) => i.key)).toEqual(["a"]);
+    expect(diff.open.map((i) => i.key)).toEqual(["b"]);
+    expect(diff.newIssues.map((i) => i.key)).toEqual(["c"]);
+    expect(heuristicPlan(diff, ["Originality"])).toEqual(["C", "B again", "Drill a question on Originality."]);
+    expect(heuristicPlan(diffWeakSpots([], []), [])).toHaveLength(3);
+  });
+});

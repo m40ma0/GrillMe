@@ -21,5 +21,12 @@ for (const scheme of ["dark", "light"] as const) {
       await page.goto(path, { waitUntil: "networkidle" });
       await expectAccessible(page);
     }
+    await page.goto(`${base}/sessions`);
+    await page.getByRole("table").getByRole("link").first().click();
+    await page.waitForLoadState("networkidle");
+    for (const tab of ["Summary", "Claims", "Rubric", "Latency", "Judges", "Transcript"]) {
+      await page.getByRole("tab", { name: tab }).click();
+      await expectAccessible(page);
+    }
   });
 }

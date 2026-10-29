@@ -8,6 +8,13 @@
       "when": 1793260855008,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793267725805,
+      "tag": "0001_m3_audit_memory",
+      "breakpoints": true
     }
   ]
 }

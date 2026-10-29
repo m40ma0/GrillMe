@@ -68,6 +68,7 @@ export const PatchProjectBody = z.object({
   timezone: TimeZone.optional(),
   videoLimitSec: z.number().int().min(10).max(3600).optional(),
   pitchScript: z.string().max(50_000).optional(),
+  submissionText: z.string().max(50_000).optional(),
   cloudUploadEnabled: z.boolean().optional(),
   sectionPlan: SectionPlanUpdate.optional(),
   setupStep: z.number().int().min(0).max(5).optional(),
@@ -98,6 +99,7 @@ export const QUEUE_NAME = "stage-ready-jobs";
 export const JobPayload = z.discriminatedUnion("name", [
   z.object({ name: z.literal("event-ingest"), projectId: z.string().uuid(), urls: z.array(z.string().url()), text: z.string().optional() }),
   z.object({ name: z.literal("winners"), projectId: z.string().uuid(), urls: z.array(z.string().url()), text: z.string().optional() }),
+  z.object({ name: z.literal("session-review"), projectId: z.string().uuid(), sessionId: z.string().uuid() }),
   z.object({ name: z.literal("repo-digest"), projectId: z.string().uuid(), githubFullName: z.string(), ref: z.string().optional(), githubTokenSealed: z.string().optional() }),
 ]);
 export type JobPayload = z.infer<typeof JobPayload>;

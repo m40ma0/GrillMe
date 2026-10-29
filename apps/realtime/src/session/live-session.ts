@@ -14,10 +14,12 @@ import {
   type Segment,
   type ServerMessage,
   type SessionSummary,
+  type AuditFlag,
   type UiRegion,
 } from "@stage-ready/shared";
 import { hamming } from "@stage-ready/shared/ws-binary";
 import type { Logger } from "pino";
+import { detectCanned, fineHash } from "../auditor/canned";
 import { Coverage } from "../auditor/coverage";
 import { RECHECK_WINDOW_MS, enforceEvidenceRule, verifyDeterministic, type LatencyRecord } from "../auditor/rules";
 import { Stopwatch, type StopwatchEvent } from "../auditor/stopwatch";
@@ -39,6 +41,8 @@ export interface SessionDeps {
   visionUrl: string | undefined;
   visionToken: string | undefined;
   speechModelConfigured: boolean;
+  /** Called once the session is persisted. */
+  onEnded?: (projectId: string, sessionId: string) => void;
 }
 
 interface LedgerClaim extends PolicyClaim {
@@ -57,6 +61,8 @@ interface Turn {
   trigger: string | null;
   answerSegmentLocalIds: string[];
 }
+
+const mmss = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
 
 /** Extra quiet after a final (which already follows ~600 ms of silence) before the answer counts as finished. */
 const ANSWER_PAUSE_MS = 1_500;
@@ -84,7 +90,11 @@ export class LiveSession {
 
   private readonly segments: Segment[] = [];
   private readonly ledger: LedgerClaim[] = [];
-  private readonly latency: (LatencyRecord & { endMs: number; detector: string })[] = [];
+  private readonly latency: (LatencyRecord & { endMs: number; detector: string; inputHash: string | null; outputHash: string | null })[] = [];
+  /** Recent changed frames (the browser skips unchanged ones), for show-or-strike and the canned detector. */
+  private readonly frames: { atMs: number; jpeg: Uint8Array }[] = [];
+  private readonly flags: AuditFlag[] = [];
+  private demoEndedAtMs: number | null = null;
   private readonly turns: Turn[] = [];
   private readonly fixTasks = new Map<string, { title: string; detail: string; suggestedArtifact: string }>();
   private readonly personaLastTurn = new Map<string, number>();
@@ -213,6 +223,7 @@ export class LiveSession {
     if (this.judgeSpeakTimer) clearTimeout(this.judgeSpeakTimer);
     await this.stt?.close().catch(() => undefined);
     await this.pipeline;
+    if (wasStarted) await this.showOrStrike();
     this.sendState();
     if (!wasStarted) return null;
     const summary = this.summary();
@@ -221,13 +232,22 @@ export class LiveSession {
       endedAt: new Date(),
       segments: this.segments,
       claims: this.ledger.map((c) => ({ localId: c.id, segmentLocalId: c.segmentLocalId, text: c.text, type: c.type, status: c.status, verdict: c.verdict })),
-      latency: this.latency.map((l) => ({ stepKey: l.stepKey, startMs: Math.round(l.startMs), endMs: Math.round(l.endMs), durationMs: Math.round(l.durationMs), detector: l.detector })),
+      latency: this.latency.map((l) => ({
+        stepKey: l.stepKey,
+        startMs: Math.round(l.startMs),
+        endMs: Math.round(l.endMs),
+        durationMs: Math.round(l.durationMs),
+        detector: l.detector,
+        inputHash: l.inputHash,
+        outputHash: l.outputHash,
+      })),
       turns: this.turns,
       fixTasks: [...this.fixTasks.values()],
       summary,
       rubricHeatmap: this.heatmap(),
     });
     this.send({ type: "session.summary", summaryId: this.ctx.sessionId });
+    this.deps.onEnded?.(this.ctx.projectId, this.ctx.sessionId);
     return this.ctx.sessionId;
   }
 
@@ -252,6 +272,7 @@ export class LiveSession {
       modelCostUsd: this.modelCost === null ? null : Math.round(this.modelCost * 10_000) / 10_000,
       modelCalls: this.modelCalls,
       stt: this.stt?.name ?? "none",
+      flags: this.flags,
     };
   }
 
@@ -273,6 +294,8 @@ export class LiveSession {
     this.observe(atMs);
     const distance = this.lastHash === null ? 0 : hamming(hash, this.lastHash);
     this.lastHash = hash;
+    this.frames.push({ atMs, jpeg });
+    if (this.frames.length > 120) this.frames.shift();
     this.onStopwatch(this.stopwatch.frame(atMs, distance, null));
     if (this.deps.tracker.available) {
       const started = Date.now();
@@ -304,7 +327,7 @@ export class LiveSession {
           const index = this.ctx.sections.findIndex((s) => s.key === msg.sectionKey);
           if (index >= 0) {
             this.manualSections = true;
-            this.sectionIndex = index;
+            this.changeSection(index);
             this.sectionStartedMs = this.now();
             this.sendState();
           }
@@ -337,11 +360,61 @@ export class LiveSession {
         }
       }
       if (index !== this.sectionIndex) {
-        this.sectionIndex = index;
+        this.changeSection(index);
         this.sendState();
       }
     }
     for (const c of this.ledger) if (c.pendingUntilMs !== null && now > c.pendingUntilMs) c.pendingUntilMs = null;
+  }
+
+  private changeSection(index: number) {
+    const leaving = this.section();
+    this.sectionIndex = index;
+    // Show or strike runs once, at the end of the demo section.
+    if (leaving?.key === "demo" && this.section()?.key !== "demo") void this.showOrStrike();
+  }
+
+  /** Flags every feature mentioned before the demo ended that was never shown, and verifies the ones that were. */
+  private async showOrStrike() {
+    if (this.demoEndedAtMs !== null || this.ctx.mode === "qa_only") return;
+    this.demoEndedAtMs = this.now();
+    const candidates = this.ledger.filter((c) => c.type === "feature" && c.status === "unverified" && c.atMs <= (this.demoEndedAtMs ?? 0));
+    let struck = 0;
+    for (const c of candidates) {
+      const frames = this.frames.filter((f) => f.atMs >= c.claim.segmentStartMs && f.atMs <= c.atMs + 20_000).slice(-3);
+      try {
+        const verdict = this.track(
+          await this.deps.ai.llm.generateObject(
+            prompts.showOrStrikeV1({ claim: c.text, claimAtMs: c.atMs, frames, actions: this.latency.map((l) => ({ stepKey: l.stepKey, startMs: l.startMs, durationMs: l.durationMs })) }),
+          ),
+        );
+        if (verdict.shown) {
+          this.updateClaim(c, { status: "verified", confidence: 0.7, evidence: [{ kind: "frame", ref: mmss(verdict.atMs ?? c.atMs), summary: verdict.summary }], suggestedRewrite: null });
+        } else {
+          struck++;
+          const feature = c.claim.featureName ?? c.text.replace(/[.!?]+$/, "");
+          this.updateClaim(c, {
+            status: "not_shown",
+            confidence: 0.7,
+            evidence: [{ kind: "frame", ref: "demo section", summary: verdict.summary }],
+            suggestedRewrite: "Add the step to the demo, or cut the line.",
+          });
+          this.fixTasks.set(`Show it or cut it: ${feature}`.slice(0, 120), {
+            title: `Show it or cut it: ${feature}`.slice(0, 120),
+            detail: `Mentioned at ${mmss(c.claim.segmentStartMs)} but never shown in the demo.`,
+            suggestedArtifact: "A demo step that shows it working",
+          });
+        }
+      } catch (error) {
+        this.deps.logger.warn({ err: error }, "show-or-strike failed");
+      }
+    }
+    if (struck > 0) this.flag({ kind: "show_or_strike", detail: `${struck} feature${struck === 1 ? " was" : "s were"} mentioned but not shown in the demo.`, refs: [] });
+  }
+
+  private flag(f: AuditFlag) {
+    this.flags.push(f);
+    this.send({ type: "audit.flag", ...f });
   }
 
   // ---------- stopwatch ----------
@@ -367,7 +440,13 @@ export class LiveSession {
         const sectionKey = stepKey.split(":")[0] ?? "pitch";
         this.stepCount.set(sectionKey, (this.stepCount.get(sectionKey) ?? 0) + 1);
         this.openStep = null;
-        this.latency.push({ stepKey, startMs: e.startMs, endMs: e.endMs, durationMs: e.durationMs, detector: e.detector });
+        // The input is the screen just before the action; the output is the screen when the result appeared.
+        const before = [...this.frames].reverse().find((f) => f.atMs < e.startMs);
+        const after = this.frames.find((f) => f.atMs >= e.endMs - 50);
+        const inputHash = before ? fineHash(before.jpeg) : null;
+        const outputHash = after ? fineHash(after.jpeg) : null;
+        this.latency.push({ stepKey, startMs: e.startMs, endMs: e.endMs, durationMs: e.durationMs, detector: e.detector, inputHash, outputHash });
+        this.checkCanned(stepKey);
         this.send({ type: "latency.step", stepKey, phase: "completed", startMs: e.startMs, durationMs: e.durationMs });
         this.send({ type: "latency.sample", stepKey, durationMs: e.durationMs, detector: e.detector });
         this.recheckPending();
@@ -375,10 +454,26 @@ export class LiveSession {
     }
   }
 
+  private checkCanned(stepKey: string) {
+    if (this.flags.some((f) => f.kind === "canned_response" && f.detail.includes(`Step ${stepKey} `))) return;
+    const samples = [
+      ...this.ctx.priorSteps,
+      ...this.latency.map((l) => ({ sessionId: this.ctx.sessionId, stepKey: l.stepKey, startMs: l.startMs, inputHash: l.inputHash, outputHash: l.outputHash })),
+    ].filter((s) => s.stepKey === stepKey);
+    for (const f of detectCanned(samples)) {
+      this.flag({ kind: "canned_response", detail: f.detail, refs: f.refs });
+      this.fixTasks.set(`Check ${stepKey} for a canned response`, {
+        title: `Check ${stepKey} for a canned response`,
+        detail: f.detail,
+        suggestedArtifact: "Run the step with two different inputs and confirm the outputs differ",
+      });
+    }
+  }
+
   private recheckPending() {
     for (const c of this.ledger) {
       if (c.pendingUntilMs === null) continue;
-      const result = verifyDeterministic(c.claim, this.latency, this.ctx.repo);
+      const result = verifyDeterministic(c.claim, this.latency, this.ctx.repo, this.ctx.docs);
       if (!result || result.pending) continue;
       c.pendingUntilMs = null;
       this.updateClaim(c, result.verdict);
@@ -425,7 +520,7 @@ export class LiveSession {
       this.send({ type: "error", code: "claim_extract_failed", message: "A sentence could not be checked for claims." });
     }
     for (const claim of extracted) {
-      const rule = verifyDeterministic(claim, this.latency, this.ctx.repo);
+      const rule = verifyDeterministic(claim, this.latency, this.ctx.repo, this.ctx.docs);
       const verdict = rule?.verdict ?? { status: "unverified" as const, confidence: 0.3, evidence: [], suggestedRewrite: null };
       const entry: LedgerClaim = {
         id: randomUUID(),

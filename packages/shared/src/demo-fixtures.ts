@@ -200,6 +200,20 @@ export const demoRepo = {
   ] satisfies RepoFinding[],
 };
 
+export const demoReadme = `# Signal Garden (fictional)
+
+Signal Garden turns noisy field reports into a response plan for coordinators.
+
+## Features
+- Groups reports by location.
+- Compares the latest incident with previous reports.
+- Offline mode is on the roadmap.
+
+## Evaluation
+The classifier reaches 89% accuracy on 200 labelled reports.`;
+
+export const demoSubmissionText = "Signal Garden helps field coordinators turn messy reports into a response plan in seconds, grouped by location.";
+
 export const demoPitchScript = `Hook: Field teams send hundreds of messy reports a day. Signal Garden turns them into a response plan in seconds.
 Problem: Coordinators copy and paste reports into spreadsheets and miss the urgent ones.
 Demo: Open the report inbox, select a field report, generate the response plan, compare incident history, review the follow-up checklist.

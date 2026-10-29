@@ -64,6 +64,8 @@ export const ServerMessage = z.discriminatedUnion("type", [
   // M2 addition: live session state, UI regions for the overlay, and server-side timings for the latency HUD.
   z.object({ type: z.literal("session.state"), state: z.enum(["ready", "live", "qa", "ended"]), elapsedMs: z.number(), sectionKey: z.string().nullable(), stt: z.string(), vision: z.string() }),
   z.object({ type: z.literal("ui.states"), frameTs: z.number(), regions: z.array(UiRegion), detector: z.enum(["sam", "phash"]) }),
+  // M3 addition: auditor flags that are not claims (canned responses, show-or-strike summary, cross-source).
+  z.object({ type: z.literal("audit.flag"), kind: z.enum(["canned_response", "cross_source", "show_or_strike"]), detail: z.string(), refs: z.array(z.string()) }),
   z.object({ type: z.literal("metric"), path: z.enum(["stt_partial", "claim_chip", "judge_decision", "frame_state"]), ms: z.number() }),
   z.object({ type: z.literal("judge.yield"), personaId: z.string(), queuedQuestion: z.string() }),
   z.object({

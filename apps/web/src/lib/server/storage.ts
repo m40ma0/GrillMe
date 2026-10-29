@@ -1,5 +1,5 @@
 import "server-only";
-import { CreateBucketCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { CreateBucketCommand, GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "./env";
 
@@ -27,6 +27,13 @@ export async function presignPut(key: string, contentType: string): Promise<{ ur
   const expiresIn = 900;
   const url = await getSignedUrl(client(), new PutObjectCommand({ Bucket: env().S3_BUCKET, Key: key, ContentType: contentType }), { expiresIn });
   return { url, key, expiresIn };
+}
+
+/** A presigned GET, valid for 15 minutes, for an s3:// URI in this project's bucket. */
+export async function presignGet(uri: string): Promise<string | null> {
+  const prefix = `s3://${env().S3_BUCKET}/`;
+  if (!uri.startsWith(prefix)) return null;
+  return getSignedUrl(client(), new GetObjectCommand({ Bucket: env().S3_BUCKET, Key: uri.slice(prefix.length) }), { expiresIn: 900 });
 }
 
 export const s3Uri = (key: string) => `s3://${env().S3_BUCKET}/${key}`;

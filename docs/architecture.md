@@ -42,7 +42,7 @@ flowchart LR
   Q --> M
 ```
 
-Status (M2): web, worker (`event-ingest`, `winners`, `repo-digest`), realtime (live sessions), Postgres, Redis and S3 are live. All model access goes through `packages/ai` (Meta chat-completions adapter, or the mocked adapter when no key is set or the project is in Demo Mode), traced with OpenTelemetry. The vision service serves streaming STT (faster-whisper), SAM 3.1 tracking (when a checkpoint is configured) and frame hashes. The companion connects in M5.
+Status (M3): web, worker (`event-ingest`, `winners`, `repo-digest`, `session-review`), realtime (live sessions with the full Claim Auditor), Postgres, Redis and S3 are live. All model access goes through `packages/ai` (Meta chat-completions adapter, or the mocked adapter when no key is set or the project is in Demo Mode), traced with OpenTelemetry. The vision service serves streaming STT (faster-whisper), SAM 3.1 tracking (when a checkpoint is configured) and frame hashes. The companion connects in M5.
 
 ## Live rehearsal sequence
 
@@ -184,4 +184,27 @@ sequenceDiagram
   Q->>Q: enforceEventSpecQuotes: unquoted fields → null, unquoted weights → equal + inferred
   Q->>Q: upsert event_specs + criteria
   UI->>W: PATCH /api/projects/:id/event (weights must total 100%)
+```
+
+## Rehearsal Memory (M3)
+
+After a session is persisted, the realtime server queues `session-review`. The worker audits claims still Unverified (Muse Wonder, model mode only), extracts weak spots with stable keys, diffs them against the previous Coach Note, retrieves memory (pgvector by relevance, or recency), and writes the next Coach Note with a three-item plan.
+
+```mermaid
+sequenceDiagram
+  participant RT as Realtime server
+  participant Q as BullMQ
+  participant W as Worker: session-review
+  participant WD as Muse Wonder
+  participant DB as Postgres + pgvector
+  RT->>DB: persist session (claims, latency hashes, flags)
+  RT->>Q: session-review { projectId, sessionId }
+  Q->>W: run
+  W->>WD: sessionAudit.v1 (unverified claims, repo findings, README, submission)
+  WD-->>W: verdicts with refs (no evidence = no change)
+  W->>DB: weak spots vs previous Coach Note (resolved, open, new)
+  W->>DB: nearest earlier notes by embedding
+  W->>WD: coachNotes.v1
+  WD-->>W: three-item next plan
+  W->>DB: insert coach_notes (+ embedding)
 ```

@@ -10,6 +10,8 @@ import {
   demoPersonas,
   demoRubricHeatmap,
   demoPitchScript,
+  demoReadme,
+  demoSubmissionText,
   demoRepo,
   demoSession,
   demoSteps,
@@ -43,6 +45,7 @@ export async function seedDemoProject(db: Db, ownerId: string): Promise<string> 
         timezone: "Asia/Singapore",
         demoMode: true,
         pitchScript: demoPitchScript,
+        submissionText: demoSubmissionText,
         setupStep: 5,
       })
       .returning();
@@ -90,6 +93,7 @@ export async function seedDemoProject(db: Db, ownerId: string): Promise<string> 
         visibility: demoRepo.visibility,
         fileCount: 38,
         digestTokens: 21_400,
+        readme: demoReadme,
         dependencies: [{ name: "generative-ai-sdk (fictional)", version: "1.0.0", manifest: "package.json" }],
       })
       .returning();
@@ -190,10 +194,10 @@ export async function seedDemoProject(db: Db, ownerId: string): Promise<string> 
     await tx.insert(t.coachNotes).values({
       projectId,
       sessionId: session.id,
-      resolved: ["Problem statement now names the responder"],
-      open: ["Support the accuracy claim with an evaluation"],
-      newIssues: ["Offline mode was claimed but not demonstrated"],
-      nextPlan: ["Show the offline flow", "Add classifier evaluation evidence", "Drill the impact question"],
+      resolved: [{ key: "criterion:problem-statement", text: "Problem statement now names the responder", severity: "medium" }],
+      open: [{ key: "claim:the summary is instant", text: 'Fix the contradicted claim "The summary is instant": it took 9.2 s.', severity: "high" }],
+      newIssues: [{ key: "pace:hook", text: "The hook runs long before the first demo moment", severity: "medium" }],
+      nextPlan: ["Show the offline flow or cut the line", "Add classifier evaluation evidence", "Drill the impact question"],
     });
 
     return projectId;

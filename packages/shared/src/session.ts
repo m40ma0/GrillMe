@@ -33,4 +33,34 @@ export interface SessionSummary {
   modelCostUsd: number | null;
   modelCalls: number;
   stt: string;
+  flags?: AuditFlag[];
+}
+
+/** One weak spot in Rehearsal Memory. `key` is stable across sessions so items can be diffed. */
+export const CoachItem = z.object({ key: z.string(), text: z.string().max(240), severity: z.enum(["high", "medium", "low"]) });
+export type CoachItem = z.infer<typeof CoachItem>;
+
+export const CoachNotesOutput = z.object({
+  resolved: z.array(CoachItem),
+  open: z.array(CoachItem),
+  newIssues: z.array(CoachItem),
+  nextPlan: z.array(z.string().max(200)).length(3),
+});
+export type CoachNotesOutput = z.infer<typeof CoachNotesOutput>;
+
+/** Auditor flags that are not claims, shown in the session review and fed to Coach Notes. */
+export const AuditFlag = z.object({ kind: z.enum(["canned_response", "cross_source", "show_or_strike"]), detail: z.string(), refs: z.array(z.string()) });
+export type AuditFlag = z.infer<typeof AuditFlag>;
+
+/** Latency budget drawn as the reference line until DemoGuard step maps set one per step. */
+export const DEFAULT_STEP_BUDGET_MS = 2_000;
+
+/** Coach Notes written before M3 stored plain strings; read both shapes. */
+export function toCoachItems(items: unknown): CoachItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((item) => {
+    if (typeof item === "string") return [{ key: `text:${item.toLowerCase()}`, text: item, severity: "medium" as const }];
+    const parsed = CoachItem.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
 }

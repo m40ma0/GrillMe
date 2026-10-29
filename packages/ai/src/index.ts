@@ -13,6 +13,8 @@ export * as prompts from "./prompts";
 export type { RepoChunk } from "./prompts";
 export * from "./heuristics";
 export * from "./claims";
+export * from "./coach";
+export * from "./embed";
 export * from "./telemetry";
 
 export interface Ai {

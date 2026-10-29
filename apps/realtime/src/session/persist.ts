@@ -8,9 +8,9 @@ export interface SessionRecord {
   endedAt: Date;
   segments: Segment[];
   claims: { localId: string; segmentLocalId: string; text: string; type: ClaimType; status: ClaimStatus; verdict: ClaimVerdict }[];
-  latency: { stepKey: string; startMs: number; endMs: number; durationMs: number; detector: string }[];
+  latency: { stepKey: string; startMs: number; endMs: number; durationMs: number; detector: string; inputHash: string | null; outputHash: string | null }[];
   turns: { personaId: string; atMs: number; kind: "interrupt" | "question" | "follow_up"; text: string; trigger: string | null; answerSegmentLocalIds: string[] }[];
-  fixTasks: { title: string; detail: string; suggestedArtifact: string }[];
+  fixTasks: { title: string; detail: string; suggestedArtifact: string; origin?: "claim" | "incident" }[];
   summary: SessionSummary;
   rubricHeatmap: Record<string, Record<string, number>>;
 }
@@ -67,7 +67,7 @@ export async function persistSession(db: Db, projectId: string, sessionId: strin
         .from(fixTasks)
         .where(and(eq(fixTasks.projectId, projectId), inArray(fixTasks.title, titles)));
       const fresh = record.fixTasks.filter((f) => !existing.some((e) => e.title === f.title));
-      if (fresh.length > 0) await tx.insert(fixTasks).values(fresh.map((f) => ({ projectId, origin: "claim" as const, ...f })));
+      if (fresh.length > 0) await tx.insert(fixTasks).values(fresh.map((f) => ({ projectId, ...f, origin: f.origin ?? ("claim" as const) })));
     }
     const [current] = await tx.select({ summary: sessions.summary }).from(sessions).where(eq(sessions.id, sessionId));
     await tx

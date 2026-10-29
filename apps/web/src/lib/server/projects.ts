@@ -1,6 +1,6 @@
 import "server-only";
 import { coachNotes, criteria, eventSpecs, fixTasks, pastWinners, personas, projects, repoFindings, repos, sectionPlans, sessions, winningPatterns } from "@stage-ready/db";
-import { computeCompliance, type ComplianceItem, type SectionPlanItem } from "@stage-ready/shared";
+import { computeCompliance, toCoachItems, type ComplianceItem, type SectionPlanItem } from "@stage-ready/shared";
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import type { EventSpecDTO, ProjectBundle, ProjectCardDTO, ProjectDTO, RepoDTO } from "@/lib/types";
 import { notFound, uuidParam } from "./api";
@@ -16,6 +16,7 @@ export const toProjectDTO = (p: ProjectRow): ProjectDTO => ({
   videoLimitSec: p.videoLimitSec,
   demoMode: p.demoMode,
   pitchScript: p.pitchScript,
+  submissionText: p.submissionText,
   setupStep: p.setupStep,
   cloudUploadEnabled: p.cloudUploadEnabled,
 });
@@ -181,7 +182,14 @@ export async function loadOverviewExtras(projectId: string) {
   ]);
   return {
     openTasks: openTasks.map((t) => ({ id: t.id, title: t.title, detail: t.detail, origin: t.origin })),
-    coachNote: note ? { resolved: note.resolved, open: note.open, newIssues: note.newIssues, nextPlan: note.nextPlan } : null,
+    coachNote: note
+      ? {
+          resolved: toCoachItems(note.resolved).map((i) => i.text),
+          open: toCoachItems(note.open).map((i) => i.text),
+          newIssues: toCoachItems(note.newIssues).map((i) => i.text),
+          nextPlan: note.nextPlan,
+        }
+      : null,
     latestSession: latestSession
       ? { id: latestSession.id, rubricHeatmap: latestSession.rubricHeatmap, score: typeof latestSession.summary?.score === "number" ? latestSession.summary.score : null }
       : null,

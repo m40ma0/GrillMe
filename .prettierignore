@@ -3,3 +3,7 @@ packages/db/drizzle
 .next
 node_modules
 apps/web/src/components/ui
+apps/web/test-results
+apps/web/playwright-report
+apps/web/e2e/.fixtures
+services/vision/.venv

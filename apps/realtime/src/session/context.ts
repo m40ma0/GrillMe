@@ -1,8 +1,9 @@
 import type { Db } from "@stage-ready/db";
-import { criteria, eventSpecs, personas, projects, repoFindings, repos, sectionPlans, sessions } from "@stage-ready/db";
+import { criteria, eventSpecs, latencySamples, personas, projects, repoFindings, repos, sectionPlans, sessions } from "@stage-ready/db";
 import type { PersonaRole, SectionKey } from "@stage-ready/shared";
-import { and, asc, eq } from "drizzle-orm";
-import type { RepoFacts } from "../auditor/rules";
+import { and, asc, desc, eq, isNotNull, ne } from "drizzle-orm";
+import type { StepSample } from "../auditor/canned";
+import type { Docs, RepoFacts } from "../auditor/rules";
 
 export interface SessionContext {
   sessionId: string;
@@ -17,6 +18,9 @@ export interface SessionContext {
   criteria: { id: string; name: string; description: string; weight: number }[];
   sections: { key: SectionKey; title: string; budgetSec: number }[];
   repo: RepoFacts | null;
+  docs: Docs;
+  /** Earlier rehearsals' step hashes, for the canned-response detector. */
+  priorSteps: StepSample[];
   ended: boolean;
 }
 
@@ -41,8 +45,16 @@ export async function loadContext(db: Db, sessionId: string, projectId: string):
       dependencies: repo.dependencies.map((d) => d.name),
       capabilities: findings.filter((f) => f.kind === "capability").map((f) => ({ summary: f.summary, ref: f.line ? `${f.filePath}:${f.line}` : f.filePath })),
       evalFiles: findings.filter((f) => /(^|\/)(evals?|benchmarks?)(\/|[._-])|eval[._-]?results|accuracy[._-]/i.test(f.filePath)).map((f) => f.filePath),
+      todos: findings.filter((f) => f.kind === "todo").map((f) => ({ summary: f.summary, ref: f.line ? `${f.filePath}:${f.line}` : f.filePath })),
+      mocks: findings.filter((f) => f.kind === "mock_response").map((f) => ({ summary: f.summary, ref: f.line ? `${f.filePath}:${f.line}` : f.filePath })),
     };
   }
+  const prior = await db
+    .select({ sessionId: latencySamples.sessionId, stepKey: latencySamples.stepKey, startMs: latencySamples.startMs, inputHash: latencySamples.inputHash, outputHash: latencySamples.outputHash })
+    .from(latencySamples)
+    .where(and(eq(latencySamples.projectId, projectId), ne(latencySamples.sessionId, sessionId), isNotNull(latencySamples.outputHash)))
+    .orderBy(desc(latencySamples.createdAt))
+    .limit(500);
   const summary = row.session.summary ?? {};
   return {
     sessionId,
@@ -57,6 +69,8 @@ export async function loadContext(db: Db, sessionId: string, projectId: string):
     criteria: criteriaRows.map((c) => ({ id: c.id, name: c.name, description: c.description, weight: c.weight })),
     sections: sectionRows.map((s) => ({ key: s.key, title: s.title, budgetSec: s.budgetSec })),
     repo: repoFacts,
+    docs: { readme: repo?.readme ?? null, submission: row.project.submissionText || null },
+    priorSteps: prior,
     ended: row.session.endedAt !== null,
   };
 }

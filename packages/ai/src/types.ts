@@ -15,6 +15,8 @@ export interface Prompt<T> {
   system: string;
   user: string;
   schema: ZodType<T, ZodTypeDef, unknown>;
+  /** JPEG frames sent with the user message (vision prompts). */
+  images?: Uint8Array[];
   /** Deterministic output used by the mocked adapter in Demo Mode and when no API key is set. */
   mock: () => T;
 }

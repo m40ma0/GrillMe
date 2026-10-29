@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { createAi, MetaModelAdapter, type Ai } from "@stage-ready/ai";
-import { WorkerEnv, loadRootEnv, parseEnv, startTelemetry } from "@stage-ready/config";
+import { WorkerEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
+import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb, projects } from "@stage-ready/db";
 import { JobPayload, QUEUE_NAME, cancelKey, type JobProgress } from "@stage-ready/shared";
 import { Worker, type Job } from "bullmq";
@@ -9,6 +10,7 @@ import IORedis from "ioredis";
 import pino from "pino";
 import { eventIngest } from "./jobs/event-ingest";
 import { repoDigest } from "./jobs/repo-digest";
+import { sessionReview } from "./jobs/session-review";
 import { winners } from "./jobs/winners";
 import { UserFacingError, type JobContext } from "./lib/context";
 import { createStorage } from "./lib/s3";
@@ -58,6 +60,8 @@ const worker = new Worker(
           return await winners(payload, ctx);
         case "repo-digest":
           return await repoDigest(payload, ctx);
+        case "session-review":
+          return await sessionReview(payload, ctx);
       }
     } catch (error) {
       ctx.logger.error({ err: error }, "job failed");

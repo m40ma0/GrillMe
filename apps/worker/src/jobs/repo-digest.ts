@@ -83,6 +83,7 @@ export async function repoDigest(payload: Payload, ctx: JobContext) {
       digestTokens,
       fileCount: digest.fileCount,
       dependencies: digest.dependencies,
+      readme: digest.readme,
     };
     const findings = digest.findings;
     await ctx.db.transaction(async (tx) => {

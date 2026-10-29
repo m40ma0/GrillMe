@@ -8,6 +8,7 @@ import { PatternsList } from "./patterns-list";
 import { PersonaCards } from "./persona-cards";
 import { RepoPanel } from "./repo-panel";
 import { SourcesForm } from "./sources-form";
+import { SubmissionEditor } from "./submission-editor";
 import { TrackCard } from "./track-card";
 import { WinnersTable } from "./winners-table";
 
@@ -86,6 +87,15 @@ export function CalibrationClient({ bundle }: { bundle: ProjectBundle }) {
         </CardHeader>
         <CardContent>
           <RepoPanel projectId={bundle.project.id} repo={bundle.repo} onDone={refresh} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Written submission</CardTitle>
+          <CardDescription>Spoken claims are checked against this and the repo README; mismatches show in the claim ledger.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SubmissionEditor projectId={bundle.project.id} initial={bundle.project.submissionText} />
         </CardContent>
       </Card>
     </div>

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid, vector } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
-import type { ClaimVerdict, Persona, RepoDigest, SectionKey, WinnerProfile, WinningPattern } from "@stage-ready/shared";
+import type { ClaimVerdict, CoachItem, Persona, RepoDigest, SectionKey, WinnerProfile, WinningPattern } from "@stage-ready/shared";
 
 // Data model from BUILD_PROMPT "Data model". Every table has a uuid v7 id,
 // createdAt and updatedAt; every child table carries projectId for row-level scoping.
@@ -47,6 +47,8 @@ export const projects = pgTable(
     cloudUploadEnabled: boolean().notNull().default(false),
     demoMode: boolean().notNull().default(false),
     pitchScript: text().notNull().default(""),
+    /** The written submission (Devpost text etc.), checked against spoken claims. */
+    submissionText: text().notNull().default(""),
     setupStep: integer().notNull().default(0),
     ...timestamps,
   },
@@ -137,6 +139,7 @@ export const repos = pgTable("repos", {
   digestTokens: integer(),
   fileCount: integer(),
   dependencies: jsonb().$type<RepoDigest["dependencies"]>().notNull().default([]),
+  readme: text(),
   ...timestamps,
 });
 
@@ -256,6 +259,9 @@ export const latencySamples = pgTable(
     stepKey: text().notNull(),
     startMs: integer().notNull(),
     endMs: integer().notNull(),
+    /** 256-bit dHash (hex) of the screen before the action and of the result; the canned-response detector compares them. */
+    inputHash: text(),
+    outputHash: text(),
     durationMs: integer().notNull(),
     detector: text().notNull(),
     ...timestamps,
@@ -470,9 +476,9 @@ export const coachNotes = pgTable(
     id: id(),
     projectId: projectRef(),
     sessionId: uuid().references(() => sessions.id, { onDelete: "set null" }),
-    resolved: jsonb().$type<string[]>().notNull().default([]),
-    open: jsonb().$type<string[]>().notNull().default([]),
-    newIssues: jsonb().$type<string[]>().notNull().default([]),
+    resolved: jsonb().$type<CoachItem[]>().notNull().default([]),
+    open: jsonb().$type<CoachItem[]>().notNull().default([]),
+    newIssues: jsonb().$type<CoachItem[]>().notNull().default([]),
     nextPlan: jsonb().$type<string[]>().notNull().default([]),
     embedding: vector({ dimensions: EMBED_DIM }),
     ...timestamps,

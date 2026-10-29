@@ -94,7 +94,15 @@ export class MetaModelAdapter implements LLM, Vision {
     const schemaHint = JSON.stringify(zodToJsonSchema(prompt.schema, { target: "openAi" }));
     const messages: ChatMessage[] = [
       { role: "system", content: `${prompt.system}\n\nReply with a single JSON value that matches this JSON Schema, and nothing else:\n${schemaHint}` },
-      { role: "user", content: prompt.user },
+      {
+        role: "user",
+        content: prompt.images?.length
+          ? [
+              { type: "text", text: prompt.user },
+              ...prompt.images.map((jpeg) => ({ type: "image_url" as const, image_url: { url: `data:image/jpeg;base64,${Buffer.from(jpeg).toString("base64")}` } })),
+            ]
+          : prompt.user,
+      },
     ];
     const started = performance.now();
     const usage: Usage = { inputTokens: 0, outputTokens: 0 };
