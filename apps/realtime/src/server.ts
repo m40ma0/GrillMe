@@ -7,7 +7,7 @@ import { ClientMessage, QUEUE_NAME, type ServerMessage } from "@stage-ready/shar
 import { BinaryKind, decodeBinary, splitFramePayload } from "@stage-ready/shared/ws-binary";
 import pino from "pino";
 import { Queue } from "bullmq";
-import Fastify from "fastify";
+import Fastify, { LogController } from "fastify";
 import IORedis from "ioredis";
 import { eq } from "drizzle-orm";
 import { DemoGuardSession, loadDemoGuardContext, type Sender } from "./demoguard/session";
@@ -20,7 +20,7 @@ const env = parseEnv("realtime", RealtimeEnv);
 await startTelemetry("stage-ready-realtime");
 const logger = pino({ name: "realtime", level: env.LOG_LEVEL });
 // Session tokens travel in the WebSocket URL, so request logs carry the path only.
-const app = Fastify({ loggerInstance: logger, disableRequestLogging: true });
+const app = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }) });
 app.addHook("onResponse", async (req, reply) => {
   req.log.info({ method: req.method, path: req.url.split("?")[0], status: reply.statusCode }, "request");
 });

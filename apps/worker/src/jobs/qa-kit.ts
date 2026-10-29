@@ -15,10 +15,10 @@ import {
   sessions,
   slides as slidesTable,
 } from "@stage-ready/db";
-import { latencySummary, snapshotNumbers, verifySlideNumbers, type JobPayload } from "@stage-ready/shared";
+import { latencySummary, type JobPayload } from "@stage-ready/shared";
 import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { UserFacingError, type JobContext } from "../lib/context";
-import { composeSlide, slidesPdf, svgToPng } from "../lib/slides";
+import { renderVerifiedSlide, slidesPdf } from "../lib/slides";
 
 type QuestionsPayload = Extract<JobPayload, { name: "questions" }>;
 type SlidesPayload = Extract<JobPayload, { name: "slides" }>;
@@ -181,25 +181,11 @@ export async function renderSlides(payload: SlidesPayload, ctx: JobContext, opti
   for (const [i, { card, question }] of cards.entries()) {
     await ctx.progress({ pct: Math.round(from + ((100 - from) * 0.9 * i) / Math.max(1, cards.length)), step: `Rendering slide ${i + 1} of ${cards.length}` });
     const snapshot = buildSlideSnapshot(question.text, card, data);
-    const expected = snapshotNumbers(snapshot);
-    let slide = await composeSlide(snapshot, { withChart: true });
-    let png = svgToPng(slide.svg);
-    let verification: "passed" | "fallback" = "passed";
-    try {
-      const reading = await ai.llm.generateObject(prompts.slideVerifyV1({ png, renderedText: slide.text }));
-      const check = verifySlideNumbers(expected, reading.value.numbers);
-      if (!check.ok) {
-        ctx.logger.warn({ answerCardId: card.id, missing: check.missing }, "slide numbers did not match the snapshot; using the fallback template");
-        verification = "fallback";
-      }
-    } catch (error) {
-      ctx.logger.warn({ err: error, answerCardId: card.id }, "slide verification failed; using the fallback template");
-      verification = "fallback";
-    }
-    if (verification === "fallback") {
-      slide = await composeSlide(snapshot, { withChart: false });
-      png = svgToPng(slide.svg);
-    }
+    const { png, verification, missing, error } = await renderVerifiedSlide(
+      snapshot,
+      async (image, text) => (await ai.llm.generateObject(prompts.slideVerifyV1({ png: image, renderedText: text }))).value.numbers,
+    );
+    if (verification === "fallback") ctx.logger.warn({ answerCardId: card.id, missing, err: error }, "slide verification did not pass; using the fallback template");
     const pngUrl = await ctx.storage.put(`projects/${project.id}/slides/${card.id}.png`, png, "image/png");
     await ctx.db.transaction(async (tx) => {
       await tx.delete(slidesTable).where(eq(slidesTable.answerCardId, card.id));

@@ -1,7 +1,7 @@
 import "server-only";
 import { heuristicPersonaStyles, prompts } from "@stage-ready/ai";
 import { personas } from "@stage-ready/db";
-import { PersonaRole, VOICE_PRESETS, normalizeWeights, type Persona } from "@stage-ready/shared";
+import { PersonaRole, VOICE_PRESETS, mentionsPerson, normalizeWeights, type Persona } from "@stage-ready/shared";
 import { eq } from "drizzle-orm";
 import type { EventSpecDTO } from "@/lib/types";
 import { ApiError } from "./api";
@@ -31,17 +31,6 @@ export function assignCriteria(criteria: { name: string; description: string; we
   for (const role of PersonaRole.options) if (out[role].length === 0) out[role] = criteria.map((c) => ({ name: c.name, weight: c.weight }));
   return out;
 }
-
-const mentionsPerson = (text: string, people: string[]) => {
-  const lower = text.toLowerCase();
-  return people.some((person) => {
-    const parts = person
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((p) => p.length >= 3);
-    return lower.includes(person.toLowerCase()) || parts.some((part) => new RegExp(`\\b${part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lower));
-  });
-};
 
 /** Builds three fictional personas from the published criteria and replaces the project's personas. */
 export async function generatePersonas(project: { id: string; demoMode: boolean }, spec: EventSpecDTO, difficulty: number, peopleNamed: string[]): Promise<Persona[]> {

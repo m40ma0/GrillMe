@@ -170,3 +170,15 @@ export const ComplianceItem = z.object({
   detail: z.string(),
 });
 export type ComplianceItem = z.infer<typeof ComplianceItem>;
+
+/** True when text mentions any of the named people (full name or any part of 3+ letters). Personas never carry real names. */
+export function mentionsPerson(text: string, people: string[]): boolean {
+  const lower = text.toLowerCase();
+  return people.some((person) => {
+    const parts = person
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((p) => p.length >= 3);
+    return lower.includes(person.toLowerCase()) || parts.some((part) => new RegExp(`\\b${part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lower));
+  });
+}

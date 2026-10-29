@@ -1,5 +1,5 @@
 import { Resvg } from "@resvg/resvg-js";
-import { formatValue, type SlideSnapshot } from "@stage-ready/shared";
+import { formatValue, snapshotNumbers, verifySlideNumbers, type SlideSnapshot } from "@stage-ready/shared";
 import { PDFDocument } from "pdf-lib";
 import * as vega from "vega";
 import * as vl from "vega-lite";
@@ -128,4 +128,22 @@ export async function slidesPdf(pngs: Uint8Array[]): Promise<Uint8Array> {
     page.drawImage(image, { x: 0, y: 0, width: SLIDE_W / 2, height: SLIDE_H / 2 });
   }
   return pdf.save();
+}
+
+/**
+ * Renders the chart slide, has a reader list the numbers on the PNG, and compares them with the
+ * snapshot. On any missing number, or if the reader fails, renders the deterministic fallback template.
+ */
+export async function renderVerifiedSlide(snapshot: SlideSnapshot, read: (png: Uint8Array, drawnText: string[]) => Promise<string[]>) {
+  const slide = await composeSlide(snapshot, { withChart: true });
+  const png = svgToPng(slide.svg);
+  try {
+    const check = verifySlideNumbers(snapshotNumbers(snapshot), await read(png, slide.text));
+    if (check.ok) return { png, verification: "passed" as const, missing: [] as string[], error: null };
+    const fallback = await composeSlide(snapshot, { withChart: false });
+    return { png: svgToPng(fallback.svg), verification: "fallback" as const, missing: check.missing, error: null };
+  } catch (error) {
+    const fallback = await composeSlide(snapshot, { withChart: false });
+    return { png: svgToPng(fallback.svg), verification: "fallback" as const, missing: [] as string[], error: error as Error };
+  }
 }

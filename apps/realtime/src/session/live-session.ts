@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { prompts, type Ai } from "@stage-ready/ai";
+import { promisedLatencyMs, prompts, type Ai } from "@stage-ready/ai";
 import type { Db } from "@stage-ready/db";
 import {
   PERSONA_ROLE_LABEL,
   TALK_OVER_YIELD_MS,
   demoRehearsalScript,
+  formatSeconds,
   latencySummary,
   type Claim,
   type ClaimStatus,
@@ -51,6 +52,8 @@ interface LedgerClaim extends PolicyClaim {
   segmentLocalId: string;
   claim: Claim;
   pendingUntilMs: number | null;
+  /** Set once a running step has already outlasted the promise, before its final measurement. */
+  earlyContradicted?: boolean;
 }
 
 interface Turn {
@@ -348,6 +351,7 @@ export class LiveSession {
     if (this.state !== "live" && this.state !== "qa") return;
     const now = this.now();
     this.onStopwatch(this.stopwatch.tick(now));
+    this.contradictWhileRunning(now);
     // Sections advance on their budgets unless the presenter marks them.
     if (!this.manualSections && this.ctx.mode === "full_pitch" && this.state === "live") {
       let elapsed = 0;
@@ -470,6 +474,29 @@ export class LiveSession {
     }
   }
 
+  /**
+   * A speed claim waiting on a step that is still running: once the step has outlasted the promise,
+   * that is already a measurement, so the chip turns Contradicted now. The final duration refines it.
+   */
+  private contradictWhileRunning(now: number) {
+    const running = this.stopwatch.running;
+    if (!running) return;
+    const elapsed = now - running.startMs;
+    for (const c of this.ledger) {
+      if (c.pendingUntilMs === null || c.earlyContradicted || c.type !== "performance") continue;
+      if (running.startMs < c.claim.segmentStartMs - 2_000 || running.startMs > c.claim.segmentStartMs + RECHECK_WINDOW_MS) continue;
+      const promised = promisedLatencyMs(c.text);
+      if (promised === null || elapsed <= promised) continue;
+      c.earlyContradicted = true;
+      this.updateClaim(c, {
+        status: "contradicted",
+        confidence: 0.8,
+        evidence: [{ kind: "latency", ref: `running @ ${mmss(running.startMs)}`, summary: `Still waiting after ${formatSeconds(elapsed)}; promised ${formatSeconds(promised)} or less.` }],
+        suggestedRewrite: "Say how long it takes once you have measured it.",
+      });
+    }
+  }
+
   private recheckPending() {
     for (const c of this.ledger) {
       if (c.pendingUntilMs === null) continue;
@@ -567,7 +594,8 @@ export class LiveSession {
     entry.verdict = verdict;
     entry.status = verdict.status;
     this.send({ type: "ledger.update", claim: { id: entry.id, text: entry.text, type: entry.type, status: entry.status, segmentStartMs: entry.claim.segmentStartMs }, verdict });
-    if (this.state === "live") void this.decide({});
+    // Judges only cut in at a sentence boundary: decide now if the presenter is silent, else at the next final.
+    if (this.state === "live" && this.vad.speechSince === null) void this.decide({});
   }
 
   // ---------- judges ----------

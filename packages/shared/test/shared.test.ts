@@ -114,3 +114,17 @@ describe("ws-binary", () => {
     expect(decoded).toEqual({ kind: BinaryKind.frame, timestampMs: 123_456, payload });
   });
 });
+
+describe("fictional personas", () => {
+  it("carry no name field, are always marked fictional, and real names from the event page are caught", async () => {
+    const { Persona, mentionsPerson, demoPersonas } = await import("../src");
+    for (const p of demoPersonas) {
+      expect(Persona.parse(p).isFictional).toBe(true);
+      expect(Object.keys(p)).not.toContain("name");
+    }
+    expect(Persona.safeParse({ ...demoPersonas[0], isFictional: false }).success).toBe(false);
+    expect(mentionsPerson("Asks like Dr. Ada Lovelace would.", ["Ada Lovelace"])).toBe(true);
+    expect(mentionsPerson("Asks what Lovelace thinks.", ["Ada Lovelace"])).toBe(true);
+    expect(mentionsPerson("Asks how each number was measured.", ["Ada Lovelace"])).toBe(false);
+  });
+});
