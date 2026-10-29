@@ -17,6 +17,7 @@ test("Director: auto-EDL from 12 fixture takes, First-20-seconds warning, render
 
   // Auto-assemble picks the highest-scoring valid take per section and fits within 180 s.
   await page.getByRole("button", { name: "Auto-assemble" }).first().click();
+  await expect(page.getByText(/^Assembled/)).toBeVisible();
   await expect(page.getByText("Fits the limit")).toBeVisible();
   const d = (await (await page.request.get(`/api/projects/${projectId}/director`)).json()) as Director;
   expect(d.takes).toHaveLength(12);
@@ -36,6 +37,7 @@ test("Director: auto-EDL from 12 fixture takes, First-20-seconds warning, render
 
   // Render a short cut of the fixture takes (trimmed to 2 s each to keep CI fast).
   await page.getByRole("button", { name: "Auto-assemble" }).first().click();
+  await expect(page.getByText(/^Assembled/).first()).toBeVisible();
   const fresh = (await (await page.request.get(`/api/projects/${projectId}/director`)).json()) as Director;
   const items = (fresh.edl?.items ?? []).map((i) => ({ ...i, inMs: 0, outMs: 2_000 }));
   expect((await page.request.patch(`/api/edls/${fresh.edl?.id}`, { data: { items } })).ok()).toBe(true);

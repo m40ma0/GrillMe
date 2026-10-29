@@ -11,6 +11,8 @@ export async function openDemoProject(page: Page): Promise<string> {
 
 /** Zero serious or critical axe violations. */
 export async function expectAccessible(page: Page) {
+  // Resize handles get aria-valuenow once their panel group has measured its layout.
+  await page.waitForFunction(() => [...document.querySelectorAll('[role="separator"][data-panel-resize-handle-id]')].every((el) => el.hasAttribute("aria-valuenow")), null, { timeout: 5_000 });
   const results = await new AxeBuilder({ page }).analyze();
   const bad = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
   expect(bad.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
