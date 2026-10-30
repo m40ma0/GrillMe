@@ -55,6 +55,12 @@ export const ModelEnv = z.object({
   META_RESPONSE_FORMAT: z.preprocess(empty, z.enum(["json_schema", "json_object", "none"]).default("json_object")),
   /** Force mocked model adapters (Demo Mode) even when keys are present. */
   MODEL_MOCK: z.preprocess(empty, bool.default(false)),
+  /** Demo Mode projects call the real Meta models (scripted speech and fixtures stay). Defaults to true in production. */
+  DEMO_LIVE_MODELS: z.preprocess(empty, bool.optional()),
+  /** Daily cap on Demo Mode spend across all visitors, tracked from MODEL_PRICES; past it Demo Mode uses the mocks. */
+  DEMO_DAILY_BUDGET_USD: z.preprocess(empty, z.coerce.number().nonnegative().default(5)),
+  /** Daily cap on Demo Mode real model calls, which applies even when MODEL_PRICES has no price for a model. */
+  DEMO_DAILY_CALL_LIMIT: z.preprocess(empty, z.coerce.number().int().nonnegative().default(1500)),
 });
 
 const BaseEnv = z

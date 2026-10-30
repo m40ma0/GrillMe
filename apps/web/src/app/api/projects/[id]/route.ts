@@ -1,7 +1,7 @@
 import { projects, upsertSectionPlan } from "@stage-ready/db";
 import { PatchProjectBody } from "@stage-ready/shared";
 import { eq } from "drizzle-orm";
-import { ApiError, body, route } from "@/lib/server/api";
+import { ApiError, body, guestForbidden, route } from "@/lib/server/api";
 import { db } from "@/lib/server/db";
 import { loadBundle, requireProject } from "@/lib/server/projects";
 
@@ -10,6 +10,7 @@ export const GET = route<{ id: string }>(async (_req, { user, params }) => Respo
 export const PATCH = route<{ id: string }>(async (req, { user, params }) => {
   const project = await requireProject(user.id, params.id);
   const { sectionPlan, ...fields } = await body(req, PatchProjectBody);
+  if (user.guest && fields.cloudUploadEnabled) throw guestForbidden("turn on cloud upload");
   if (sectionPlan && new Set(sectionPlan.map((s) => s.key)).size !== sectionPlan.length) throw new ApiError(400, "invalid_request", "Each section can appear only once.");
   await db().transaction(async (tx) => {
     if (Object.keys(fields).length > 0)

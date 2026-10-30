@@ -155,6 +155,8 @@ What to know:
    META_REASONING_EFFORT_SPARK=low
    META_REASONING_EFFORT_WONDER=high
    META_RESPONSE_FORMAT=json_schema
+   DEMO_DAILY_BUDGET_USD=5
+   DEMO_DAILY_CALL_LIMIT=1500
    ```
 
    `PUBLIC_HOST` sets `AUTH_URL`, `REALTIME_URL` and `WEB_ORIGIN`; `NODE_ENV` and `REDIS_URL` are set in the image. Then store it in Modal:
@@ -174,6 +176,16 @@ What to know:
 6. **Check.** Open `APP_URL/api/health` (the first visit wakes the container: allow a minute). In the Modal dashboard, the `stage-ready` app's logs show `Migrations applied.`, `router on :7860`, realtime `Server listening` and `worker listening on queue stage-ready-jobs` with `"models":"meta"`. Then sign in at `APP_URL` and run a short rehearsal.
 
 To update: `git pull`, then deploy again.
+
+Visitors can try it without signing in: **Try Demo Mode** creates a guest workspace (24 hours) with the fictional project, running on the real Meta models until today's demo allowance (`DEMO_DAILY_BUDGET_USD`, tracked only for models priced in `MODEL_PRICES`, and `DEMO_DAILY_CALL_LIMIT`) is used up; after that Demo Mode answers with the mocks and each caption says so. Set `DEMO_LIVE_MODELS=false` to keep Demo Mode mocked.
+
+To avoid the cold start while judges are looking (it uses credits while idle), deploy with:
+
+```bash
+KEEP_WARM=1 modal deploy deploy/modal/stage_ready.py
+```
+
+Deploy again without it afterwards.
 
 The same container also runs on any Docker host with `deploy/container/Dockerfile` (settings as environment variables, port 7860).
 

@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createAi, MetaModelAdapter, type Ai } from "@stage-ready/ai";
+import { createAi, createDemoAi, MetaModelAdapter, type Ai } from "@stage-ready/ai";
 import { WorkerEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
 import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb, projects } from "@stage-ready/db";
@@ -31,12 +31,14 @@ if (live.llm instanceof MetaModelAdapter) {
   logger.info(check.checked ? "configured model IDs confirmed by the model listing" : "the API has no model listing; skipped the model ID check");
 }
 
+const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+// Demo Mode: real models within the daily demo allowance (counted in Redis across services), else mocks.
+const demo = createDemoAi(env, live, mock, connection, logger);
+
 const aiFor = async (projectId: string): Promise<Ai> => {
   const [project] = await db.select({ demoMode: projects.demoMode }).from(projects).where(eq(projects.id, projectId));
-  return project?.demoMode ? mock : live;
+  return project?.demoMode ? demo : live;
 };
-
-const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const followUps = new Queue(QUEUE_NAME, { connection, defaultJobOptions: { attempts: 1, removeOnComplete: { age: 86_400, count: 500 }, removeOnFail: { age: 7 * 86_400 } } });
 
 const worker = new Worker(

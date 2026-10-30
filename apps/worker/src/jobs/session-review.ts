@@ -123,7 +123,11 @@ export async function sessionReview(payload: Payload, ctx: JobContext) {
     .map((c) => c.name);
 
   await ctx.progress({ pct: 75, step: "Writing Coach Notes" });
-  const { value: plan } = await ai.llm.generateObject(
+  const {
+    value: plan,
+    modelId,
+    latencyMs,
+  } = await ai.llm.generateObject(
     prompts.coachNotesV1({
       projectName: project.name,
       diff,
@@ -135,7 +139,17 @@ export async function sessionReview(payload: Payload, ctx: JobContext) {
   await db.delete(coachNotes).where(eq(coachNotes.sessionId, session.id));
   const [note] = await db
     .insert(coachNotes)
-    .values({ projectId: project.id, sessionId: session.id, resolved: diff.resolved, open: diff.open, newIssues: diff.newIssues, nextPlan: plan.nextPlan, embedding })
+    .values({
+      projectId: project.id,
+      sessionId: session.id,
+      resolved: diff.resolved,
+      open: diff.open,
+      newIssues: diff.newIssues,
+      nextPlan: plan.nextPlan,
+      embedding,
+      modelId,
+      modelLatencyMs: Math.round(latencyMs),
+    })
     .returning({ id: coachNotes.id });
   // Auto-refresh: new rehearsal data rebuilds the question bank and its slides.
   await ctx.enqueue({ name: "questions", projectId: project.id, reason: "session" });

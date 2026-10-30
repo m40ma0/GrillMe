@@ -1,5 +1,5 @@
 "use client";
-import type { ClaimStatus, ClaimType, ClaimVerdict, Segment, ServerMessage, UiRegion } from "@stage-ready/shared";
+import type { ClaimStatus, ClaimType, ClaimVerdict, ModelTag, Segment, ServerMessage, UiRegion } from "@stage-ready/shared";
 import { create } from "zustand";
 
 export interface LedgerRow {
@@ -10,6 +10,7 @@ export interface LedgerRow {
   verdict: ClaimVerdict;
   atMs: number;
   updatedAt: number;
+  model?: ModelTag;
 }
 
 export interface JudgeLine {
@@ -19,6 +20,7 @@ export interface JudgeLine {
   trigger: string | null;
   at: number;
   yielded: boolean;
+  model?: ModelTag;
 }
 
 type Phase = "idle" | "connecting" | "ready" | "live" | "qa" | "ending" | "ended";
@@ -95,7 +97,16 @@ export const useStudio = create<StudioState>((set, get) => ({
         return set({
           ledger: {
             ...s.ledger,
-            [m.claim.id]: { id: m.claim.id, text: m.claim.text, type: m.claim.type, status: m.claim.status, verdict: m.verdict, atMs: m.claim.segmentStartMs ?? 0, updatedAt: Date.now() },
+            [m.claim.id]: {
+              id: m.claim.id,
+              text: m.claim.text,
+              type: m.claim.type,
+              status: m.claim.status,
+              verdict: m.verdict,
+              atMs: m.claim.segmentStartMs ?? 0,
+              updatedAt: Date.now(),
+              ...(m.claim.model ? { model: m.claim.model } : {}),
+            },
           },
         });
       case "latency.step":
@@ -107,7 +118,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       case "coverage.update":
         return set({ coverage: { ...s.coverage, [m.criterionId]: { ...(s.coverage[m.criterionId] ?? {}), [m.sectionKey]: m.score } } });
       case "judge.speak": {
-        const line = { personaId: m.personaId, text: m.text, kind: m.kind ?? "interrupt", trigger: m.trigger ?? null, at: Date.now(), yielded: false };
+        const line = { personaId: m.personaId, text: m.text, kind: m.kind ?? "interrupt", trigger: m.trigger ?? null, at: Date.now(), yielded: false, ...(m.model ? { model: m.model } : {}) };
         return set({ speaking: line, judgeLog: [...s.judgeLog, line], queued: s.queued.filter((q) => q.text !== m.text) });
       }
       case "judge.yield":

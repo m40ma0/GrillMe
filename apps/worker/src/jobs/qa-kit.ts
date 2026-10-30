@@ -82,7 +82,7 @@ export async function questionBank(payload: QuestionsPayload, ctx: JobContext) {
 
   await ctx.progress({ pct: 20, step: "Ranking likely questions and writing answer cards" });
   const ai = await ctx.aiFor(project.id);
-  const { value } = await ai.llm.generateObject(prompts.questionBankV1(input));
+  const { value, modelId, latencyMs } = await ai.llm.generateObject(prompts.questionBankV1(input));
 
   // Evidence refs must point at data that exists; anything else is dropped, not trusted.
   const known = new Set([
@@ -101,7 +101,15 @@ export async function questionBank(payload: QuestionsPayload, ctx: JobContext) {
     const keep = new Set<string>();
     const ids: string[] = [];
     for (const q of bank) {
-      const values = { text: q.text, personaId: q.personaRole ? (personaByRole.get(q.personaRole) ?? null) : null, likelihood: q.likelihood, damage: q.damage, sourceRefs: q.sourceRefs };
+      const values = {
+        text: q.text,
+        personaId: q.personaRole ? (personaByRole.get(q.personaRole) ?? null) : null,
+        likelihood: q.likelihood,
+        damage: q.damage,
+        sourceRefs: q.sourceRefs,
+        modelId,
+        modelLatencyMs: Math.round(latencyMs),
+      };
       const prior = byText.get(norm(q.text));
       // Drill history (askedCount, lastScore) survives a rebuild for the same question.
       const [row] = prior

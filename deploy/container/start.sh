@@ -23,6 +23,20 @@ pnpm db:migrate
 PORT=3000 pnpm --filter @stage-ready/web start &
 REALTIME_PORT=4000 pnpm --filter @stage-ready/realtime start &
 pnpm --filter @stage-ready/worker start &
+
+# Open the public port only once web and realtime answer, so a host that waits for the port (Modal) holds
+# the first visitor's request instead of showing the "starting" page.
+node -e '
+const up = (port) => fetch(`http://127.0.0.1:${port}/api/health`).then((r) => r.ok, () => false);
+const deadline = Date.now() + 120_000;
+(async () => {
+  while (Date.now() < deadline) {
+    if ((await up(3000)) && (await up(4000))) return;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  console.error("web or realtime did not answer within 2 minutes; opening the port anyway");
+})();
+'
 node deploy/container/router.mjs &
 
 set +e

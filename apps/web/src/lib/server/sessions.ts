@@ -55,6 +55,7 @@ export async function loadSessionReview(userId: string, sessionId: string): Prom
       suggestedRewrite: c.suggestedRewrite,
       atMs: transcript.find((s) => s.id === c.segmentId)?.startMs ?? null,
       evidence: evidenceRows.filter((e) => e.claimId === c.id).map((e) => ({ kind: e.kind, ref: e.ref.value, summary: e.summary })),
+      model: c.modelId ? { modelId: c.modelId, latencyMs: c.modelLatencyMs } : null,
     })),
     latency: {
       samples: latency.map((l) => ({ stepKey: l.stepKey, startMs: l.startMs, durationMs: l.durationMs, detector: l.detector })),
@@ -73,6 +74,7 @@ export async function loadSessionReview(userId: string, sessionId: string): Prom
         trigger: t.trigger,
         text: t.text,
         persona: p ? PERSONA_ROLE_LABEL[p.role] : "Judge",
+        model: t.modelId ? { modelId: t.modelId, latencyMs: t.modelLatencyMs } : null,
         answer: t.presenterAnswerSegmentIds
           .map((id) => segText.get(id) ?? "")
           .filter(Boolean)
@@ -80,7 +82,15 @@ export async function loadSessionReview(userId: string, sessionId: string): Prom
       };
     }),
     transcript: transcript.map((s) => ({ id: s.id, startMs: s.startMs, endMs: s.endMs, speaker: s.speaker, text: s.text })),
-    coachNote: note ? { resolved: toCoachItems(note.resolved), open: toCoachItems(note.open), newIssues: toCoachItems(note.newIssues), nextPlan: note.nextPlan } : null,
+    coachNote: note
+      ? {
+          resolved: toCoachItems(note.resolved),
+          open: toCoachItems(note.open),
+          newIssues: toCoachItems(note.newIssues),
+          nextPlan: note.nextPlan,
+          model: note.modelId ? { modelId: note.modelId, latencyMs: note.modelLatencyMs } : null,
+        }
+      : null,
   };
 }
 
@@ -115,5 +125,6 @@ export async function loadProgress(userId: string, projectId: string): Promise<P
     }),
     history: notes.map((n) => ({ sessionId: n.sessionId, createdAt: n.createdAt.toISOString(), resolved: toCoachItems(n.resolved), open: toCoachItems(n.open), newIssues: toCoachItems(n.newIssues) })),
     nextPlan: latest?.nextPlan ?? [],
+    nextPlanModel: latest?.modelId ? { modelId: latest.modelId, latencyMs: latest.modelLatencyMs } : null,
   };
 }

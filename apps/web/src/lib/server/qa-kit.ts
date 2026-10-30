@@ -30,6 +30,7 @@ export async function loadQaKit(projectId: string): Promise<QaKitDTO> {
       askedCount: q.askedCount,
       lastScore: q.lastScore,
       sourceRefs: q.sourceRefs,
+      model: q.modelId ? { modelId: q.modelId, latencyMs: q.modelLatencyMs } : null,
       card: card ? { id: card.id, script: card.script, bridgeLine: card.bridgeLine, evidenceRefs: card.evidenceRefs } : null,
       slide: slide ? { id: slide.id, verification: slide.verification, snapshot: slide.dataSnapshot as SlideSnapshot, hasPng: Boolean(slide.pngUrl) } : null,
     }))

@@ -1,5 +1,5 @@
 import websocket from "@fastify/websocket";
-import { createAi, metaApiKey } from "@stage-ready/ai";
+import { createAi, createDemoAi, metaApiKey } from "@stage-ready/ai";
 import { RealtimeEnv, loadRootEnv, parseEnv, verifySessionToken } from "@stage-ready/config";
 import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb, projects, sessions as sessionsTable } from "@stage-ready/db";
@@ -28,9 +28,11 @@ await app.register(websocket, { options: { maxPayload: 4 * 1024 * 1024 } });
 const db = createDb(env.DATABASE_URL);
 const live = createAi(env, logger);
 const mock = createAi(env, logger, { forceMock: true });
+const redis = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+const demo = createDemoAi(env, live, mock, redis, logger);
 app.log.info({ models: live.mode, reason: live.reason }, "model adapters ready");
 // After each session the worker writes Coach Notes (Rehearsal Memory).
-const jobs = new Queue(QUEUE_NAME, { connection: new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null }), defaultJobOptions: { attempts: 2, removeOnComplete: { age: 86_400 } } });
+const jobs = new Queue(QUEUE_NAME, { connection: redis, defaultJobOptions: { attempts: 2, removeOnComplete: { age: 86_400 } } });
 const onEnded = (projectId: string, sessionId: string) =>
   void jobs.add("session-review", { projectId, sessionId }).catch((error: unknown) => logger.error({ err: error }, "could not queue the session review"));
 
@@ -63,7 +65,7 @@ async function open(sid: string, pid: string): Promise<Entry | null> {
   if (!ctx || ctx.ended) return null;
   const session = new LiveSession(ctx, {
     db,
-    ai: ctx.demoMode ? mock : live,
+    ai: ctx.demoMode ? demo : live,
     logger: logger.child({ sessionId: sid }),
     tracker,
     visionUrl: env.VISION_SERVICE_URL,

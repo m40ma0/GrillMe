@@ -44,12 +44,16 @@ export const ClientMessage = z.discriminatedUnion("type", [
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
+/** Which model produced a claim verdict or a judge line, and how long it took ("mock" when mocked). */
+export const ModelTag = z.object({ modelId: z.string(), latencyMs: z.number().int().nonnegative(), fallback: z.enum(["budget", "error"]).optional() });
+export type ModelTag = z.infer<typeof ModelTag>;
+
 export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("transcript.partial"), segment: Segment }),
   z.object({ type: z.literal("transcript.final"), segment: Segment }),
   z.object({
     type: z.literal("ledger.update"),
-    claim: z.object({ id: z.string(), text: z.string(), type: ClaimType, status: ClaimStatus, segmentStartMs: z.number().int().optional() }),
+    claim: z.object({ id: z.string(), text: z.string(), type: ClaimType, status: ClaimStatus, segmentStartMs: z.number().int().optional(), model: ModelTag.optional() }),
     verdict: ClaimVerdict,
   }),
   z.object({ type: z.literal("latency.sample"), stepKey: z.string(), durationMs: z.number(), detector: z.string().optional() }),
@@ -63,6 +67,7 @@ export const ServerMessage = z.discriminatedUnion("type", [
     audioStreamId: z.string().nullable(),
     kind: z.enum(["interrupt", "question", "follow_up"]).optional(),
     trigger: z.string().nullable().optional(),
+    model: ModelTag.optional(),
   }),
   // M2 addition: live session state, UI regions for the overlay, and server-side timings for the latency HUD.
   z.object({ type: z.literal("session.state"), state: z.enum(["ready", "live", "qa", "ended"]), elapsedMs: z.number(), sectionKey: z.string().nullable(), stt: z.string(), vision: z.string() }),
@@ -104,3 +109,20 @@ export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
+
+/** "muse-spark-1.3" → "Muse Spark 1.3"; "mock" → "Mocked". */
+export function modelLabel(modelId: string): string {
+  if (modelId === "mock") return "Mocked";
+  return modelId
+    .split("-")
+    .map((part) => (/^\d/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join(" ");
+}
+
+/** The attribution caption: "Muse Spark 1.3 · 1.9 s", or why it was mocked. */
+export function modelCaption(tag: { modelId: string; latencyMs: number | null; fallback?: "budget" | "error" | undefined }): string {
+  if (tag.fallback === "budget") return "Mocked · today's demo allowance is used up";
+  if (tag.fallback === "error") return "Mocked · the model call failed";
+  if (tag.modelId === "mock") return "Mocked";
+  return tag.latencyMs === null ? modelLabel(tag.modelId) : `${modelLabel(tag.modelId)} · ${(tag.latencyMs / 1000).toFixed(1)} s`;
+}

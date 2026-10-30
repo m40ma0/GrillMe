@@ -30,6 +30,8 @@ export const users = pgTable("users", {
   email: text().notNull().unique(),
   name: text(),
   githubLogin: text().unique(),
+  /** An anonymous guest-demo visitor (signed cookie, 24 h); deleted with its projects after 48 h. */
+  isGuest: boolean().notNull().default(false),
   ...timestamps,
 });
 
@@ -228,6 +230,9 @@ export const claims = pgTable(
     status: text({ enum: ["verified", "contradicted", "unverified", "not_shown"] }).notNull(),
     confidence: real().notNull().default(0),
     suggestedRewrite: text(),
+    /** The model behind it ("mock" when mocked) and its latency, for the attribution caption. */
+    modelId: text(),
+    modelLatencyMs: integer(),
     ...timestamps,
   },
   (t) => [index().on(t.sessionId)],
@@ -288,6 +293,9 @@ export const judgeTurns = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::uuid[]`),
+    /** The model behind it ("mock" when mocked) and its latency, for the attribution caption. */
+    modelId: text(),
+    modelLatencyMs: integer(),
     ...timestamps,
   },
   (t) => [index().on(t.sessionId)],
@@ -305,6 +313,9 @@ export const questions = pgTable(
     sourceRefs: jsonb().$type<string[]>().notNull().default([]),
     askedCount: integer().notNull().default(0),
     lastScore: real(),
+    /** The model behind it ("mock" when mocked) and its latency, for the attribution caption. */
+    modelId: text(),
+    modelLatencyMs: integer(),
     ...timestamps,
   },
   (t) => [index().on(t.projectId)],
@@ -493,6 +504,9 @@ export const coachNotes = pgTable(
     newIssues: jsonb().$type<CoachItem[]>().notNull().default([]),
     nextPlan: jsonb().$type<string[]>().notNull().default([]),
     embedding: vector({ dimensions: EMBED_DIM }),
+    /** The model behind it ("mock" when mocked) and its latency, for the attribution caption. */
+    modelId: text(),
+    modelLatencyMs: integer(),
     ...timestamps,
   },
   (t) => [index().on(t.projectId)],

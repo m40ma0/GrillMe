@@ -2,11 +2,13 @@ import "server-only";
 import { users } from "@stage-ready/db";
 import { ensureDevUser } from "@stage-ready/db/seed";
 import { getToken } from "next-auth/jwt";
-import { headers } from "next/headers";
+import { eq, and } from "drizzle-orm";
+import { cookies, headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "@/auth";
 import { db } from "./db";
 import { env } from "./env";
+import { GUEST_COOKIE, readGuestToken } from "./guest";
 
 export interface CurrentUser {
   id: string;
@@ -14,17 +16,19 @@ export interface CurrentUser {
   name: string | null;
   githubLogin: string | null;
   bypass: boolean;
+  /** An anonymous guest-demo visitor: Demo Mode only, no repo linking or cloud upload. */
+  guest: boolean;
 }
 
-/** The signed-in user, or the local developer when DEV_AUTH_BYPASS=true. */
+/** The signed-in user, the local developer when DEV_AUTH_BYPASS=true, or a guest-demo visitor. */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (env().DEV_AUTH_BYPASS) {
     const user = await ensureDevUser(db());
-    return { id: user.id, email: user.email, name: user.name, githubLogin: user.githubLogin, bypass: true };
+    return { id: user.id, email: user.email, name: user.name, githubLogin: user.githubLogin, bypass: true, guest: false };
   }
   const session = await auth();
   const email = session?.user?.email;
-  if (!email) return null;
+  if (!email) return guestUser();
   const githubLogin = (session.user as { githubLogin?: string }).githubLogin ?? null;
   const [row] = await db()
     .insert(users)
@@ -32,8 +36,18 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     .onConflictDoUpdate({ target: users.email, set: { name: session.user?.name ?? null, githubLogin } })
     .returning();
   if (!row) return null;
-  return { id: row.id, email: row.email, name: row.name, githubLogin: row.githubLogin, bypass: false };
+  return { id: row.id, email: row.email, name: row.name, githubLogin: row.githubLogin, bypass: false, guest: false };
 });
+
+async function guestUser(): Promise<CurrentUser | null> {
+  const userId = readGuestToken((await cookies()).get(GUEST_COOKIE)?.value, env().AUTH_SECRET);
+  if (!userId) return null;
+  const [row] = await db()
+    .select()
+    .from(users)
+    .where(and(eq(users.id, userId), eq(users.isGuest, true)));
+  return row ? { id: row.id, email: row.email, name: "Guest", githubLogin: null, bypass: false, guest: true } : null;
+}
 
 /** The sealed GitHub token from the session cookie, for read-only repo access in jobs. */
 export async function sealedGitHubToken(): Promise<string | undefined> {

@@ -18,5 +18,5 @@ export const POST = route<{ id: string }>(
     });
     return Response.json({ jobId }, { status: 202 });
   },
-  { rateLimit: { limit: 6, windowMs: 60_000 } },
+  { rateLimit: { limit: 6, windowMs: 60_000 }, guests: "link a repo" },
 );

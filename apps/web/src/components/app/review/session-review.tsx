@@ -16,6 +16,7 @@ import type { CoachItemDTO, SessionReviewDTO } from "@/lib/types";
 import { EmptyState } from "../empty-state";
 import { StatusBadge } from "../status-badge";
 import { RecordingPlayer } from "./player";
+import { ModelCaption } from "@/components/app/model-caption";
 
 const clock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
 const SEVERITY: Record<CoachItemDTO["severity"], ClaimStatus> = { high: "contradicted", medium: "unverified", low: "not_shown" };
@@ -59,6 +60,7 @@ function CoachNotes({ data }: { data: SessionReviewDTO }) {
             <li key={p}>{p}</li>
           ))}
         </ol>
+        <ModelCaption modelId={note.model?.modelId} latencyMs={note.model?.latencyMs ?? null} className="mt-1" />
       </div>
     </div>
   );
@@ -167,6 +169,7 @@ export function SessionReview({ data }: { data: SessionReviewDTO }) {
                       <StatusBadge status={c.status} />
                     </div>
                     {c.suggestedRewrite ? <p className="text-muted-foreground text-xs">Say instead: {c.suggestedRewrite}</p> : null}
+                    <ModelCaption modelId={c.model?.modelId} latencyMs={c.model?.latencyMs ?? null} />
                   </li>
                 ))}
               </ul>
@@ -229,7 +232,10 @@ export function SessionReview({ data }: { data: SessionReviewDTO }) {
                       </button>
                     )}
                   </TableCell>
-                  <TableCell className="whitespace-normal">{c.text}</TableCell>
+                  <TableCell className="whitespace-normal">
+                    {c.text}
+                    <ModelCaption modelId={c.model?.modelId} latencyMs={c.model?.latencyMs ?? null} className="flex" />
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-xs">{c.type}</TableCell>
                   <TableCell>
                     <Evidence claim={c} />
@@ -335,6 +341,7 @@ export function SessionReview({ data }: { data: SessionReviewDTO }) {
                 </div>
                 <p className="font-medium">{t.text}</p>
                 <p className="text-muted-foreground">{t.answer ? `You answered: ${t.answer}` : "No answer recorded."}</p>
+                <ModelCaption modelId={t.model?.modelId} latencyMs={t.model?.latencyMs ?? null} />
               </li>
             ))}
           </ul>

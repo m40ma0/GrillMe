@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useStudio, type LedgerRow } from "@/stores/studio";
+import { ModelCaption } from "../model-caption";
 import { StatusBadge } from "../status-badge";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -60,6 +61,7 @@ const columns = [
       <div className="grid gap-0.5">
         <span className="line-clamp-3">{c.getValue()}</span>
         <span className="text-muted-foreground text-xs">{TYPE_LABEL[c.row.original.type] ?? c.row.original.type}</span>
+        <ModelCaption modelId={c.row.original.model?.modelId} latencyMs={c.row.original.model?.latencyMs ?? null} fallback={c.row.original.model?.fallback} />
       </div>
     ),
   }),

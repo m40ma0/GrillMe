@@ -10,6 +10,7 @@ const secret = process.env.AUTH_SECRET;
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...(secret ? { secret } : {}),
   session: { strategy: "jwt" },
+  pages: { signIn: "/signin", error: "/signin" },
   providers:
     process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET
       ? [GitHub({ clientId: process.env.AUTH_GITHUB_ID, clientSecret: process.env.AUTH_GITHUB_SECRET, authorization: { params: { scope: "read:user user:email" } } })]

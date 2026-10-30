@@ -16,6 +16,7 @@ import { JobProgress } from "../job-progress";
 import { AnswerCardEditor } from "./answer-card-editor";
 import { DrillMode } from "./drill-mode";
 import { SlidePreview } from "./slide-preview";
+import { ModelCaption } from "@/components/app/model-caption";
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
@@ -138,6 +139,7 @@ export function QaKit({ projectId, demoMode, initial }: { projectId: string; dem
                         {q.text}
                       </button>
                       {q.card && q.card.evidenceRefs.length === 0 ? <span className="text-status-unverified-foreground ml-2 text-xs whitespace-nowrap">No evidence</span> : null}
+                      <ModelCaption modelId={q.model?.modelId} latencyMs={q.model?.latencyMs ?? null} className="flex" />
                     </TableCell>
                     <TableCell className="text-muted-foreground hidden md:table-cell">{q.personaRole ? PERSONA_ROLE_LABEL[q.personaRole] : "Any"}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{pct(q.likelihood)}</TableCell>

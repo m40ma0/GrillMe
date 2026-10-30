@@ -4,7 +4,7 @@ Rehearse against honest judges. Present with a safety net.
 
 Stage Ready helps people rehearse high-stakes demos: fictional judges built from the event's real criteria, a Claim Auditor that checks claims against evidence, prepared answers, a best-take video Director and DemoGuard for the live demo. It was built milestone by milestone from `docs/BUILD_PROMPT.md`; **M0 to M6 are done**, with one exception by request: DemoGuard decides and records fallback switches but does not play the fallback video or switch OBS scenes yet.
 
-Try it without any keys: follow Local setup, open the seeded **Signal Garden** project (Demo Mode, fictional data) and press **Start rehearsal**.
+**Try it live:** https://x4yees--stage-ready.modal.run → **Try Demo Mode**. No sign-up: a guest workspace with the fictional Signal Garden project, running on the real Meta models within a daily allowance (each judge line, claim, Coach Note and question is captioned with the model that produced it). Locally, Demo Mode needs no keys at all: follow Local setup, open Signal Garden and press **Start rehearsal**.
 
 ## Local setup
 

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Stage Ready">
+  <defs>
+    <linearGradient id="sr-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8B92FA"/>
+      <stop offset="1" stop-color="#4338CA"/>
+    </linearGradient>
+    <linearGradient id="sr-beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#sr-tile)"/>
+  <!-- Spotlight beam falling on the stage -->
+  <path d="M214 96 H298 L408 372 H104 Z" fill="url(#sr-beam)"/>
+  <!-- Lamp -->
+  <rect x="200" y="62" width="112" height="44" rx="16" fill="#FFFFFF"/>
+  <!-- Stage floor -->
+  <ellipse cx="256" cy="386" rx="172" ry="36" fill="#FFFFFF"/>
+  <!-- Ready: the check -->
+  <path d="M178 254 L232 306 L338 196" fill="none" stroke="#FFFFFF" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

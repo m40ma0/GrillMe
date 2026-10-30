@@ -22,6 +22,9 @@ test("a Demo Mode rehearsal: ledger chips, repo truth, show-or-strike, interrupt
   // At difficulty 3 the panel interrupts at least twice within three minutes, only at sentence boundaries.
   await expect.poll(() => page.getByLabel("Judge turns").getByText("Interrupt", { exact: true }).count(), { timeout: 150_000 }).toBeGreaterThanOrEqual(2);
   await expect(page.getByText("Fictional persona").first()).toBeVisible();
+  // Every judge line and claim chip says which model produced it (mocked here: e2e runs without a key).
+  await expect(page.getByLabel("Judge turns").locator("[data-model]").first()).toHaveText(/Mocked|Muse Spark/);
+  await expect(ledger.locator("[data-model]").first()).toHaveText(/Mocked|Muse Spark/);
 
   // Repo truth: the fixture repo has a TODO for offline mode and a hard-coded 0.92.
   await expect(ledger.getByRole("row").filter({ hasText: "Signal Garden supports offline mode." })).toContainText("Contradicted");

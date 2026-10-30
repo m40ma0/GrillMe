@@ -8,6 +8,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import type { ProgressDTO } from "@/lib/types";
 import { EmptyState } from "./empty-state";
 import { StatusBadge } from "./status-badge";
+import { ModelCaption } from "@/components/app/model-caption";
 
 const SERIES = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 
@@ -70,11 +71,14 @@ export function ProgressView({ data }: { data: ProgressDTO }) {
           </CardHeader>
           <CardContent>
             {data.nextPlan.length ? (
-              <ol className="list-decimal pl-5">
-                {data.nextPlan.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ol>
+              <>
+                <ol className="list-decimal pl-5">
+                  {data.nextPlan.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ol>
+                <ModelCaption modelId={data.nextPlanModel?.modelId} latencyMs={data.nextPlanModel?.latencyMs ?? null} className="mt-2" />
+              </>
             ) : (
               <p className="text-muted-foreground">Written after your next rehearsal.</p>
             )}

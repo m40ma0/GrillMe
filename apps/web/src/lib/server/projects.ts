@@ -189,6 +189,7 @@ export async function loadOverviewExtras(projectId: string) {
           open: toCoachItems(note.open).map((i) => i.text),
           newIssues: toCoachItems(note.newIssues).map((i) => i.text),
           nextPlan: note.nextPlan,
+          model: note.modelId ? { modelId: note.modelId, latencyMs: note.modelLatencyMs } : null,
         }
       : null,
     latestSession: latestSession

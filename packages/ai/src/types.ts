@@ -34,6 +34,8 @@ export interface GenerateResult<T> {
   attempts: number;
   /** null when MODEL_PRICES has no entry for the model. */
   costUsd: number | null;
+  /** Set when Demo Mode answered with the mock instead: the daily allowance was used up, or the real call failed. */
+  fallback?: "budget" | "error";
 }
 
 export interface LLM {

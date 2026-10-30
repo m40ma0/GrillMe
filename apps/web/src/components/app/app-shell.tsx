@@ -1,5 +1,5 @@
 "use client";
-import { Command, FolderPlus, LayoutGrid, LogOut, Sparkles } from "lucide-react";
+import { Command, FolderPlus, LayoutGrid, LogIn, LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -27,11 +27,13 @@ import type { ProjectCardDTO } from "@/lib/types";
 import { CommandPalette } from "./command-palette";
 import { DeadlineCountdown } from "./deadline-countdown";
 import { PROJECT_NAV } from "./nav";
+import { StageReadyMark } from "./stage-ready-mark";
 
 export interface ShellUser {
   name: string | null;
   email: string;
   bypass: boolean;
+  guest: boolean;
 }
 
 const initials = (text: string) =>
@@ -63,9 +65,7 @@ export function AppShell({ user, projects, defaultOpen, children }: { user: Shel
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild tooltip="Stage Ready">
                 <Link href="/projects">
-                  <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg">
-                    <Sparkles size={16} strokeWidth={1.75} aria-hidden />
-                  </span>
+                  <StageReadyMark title={null} />
                   <span className="grid leading-tight">
                     <span className="font-semibold">Stage Ready</span>
                     <span className="text-muted-foreground text-xs">Rehearsal workspace</span>
@@ -121,17 +121,17 @@ export function AppShell({ user, projects, defaultOpen, children }: { user: Shel
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" tooltip={user.name ?? user.email} asChild>
+              <SidebarMenuButton size="lg" tooltip={user.guest ? "Sign in with GitHub" : (user.name ?? user.email)} asChild>
                 {/* With the dev bypass there is no account to sign out of, so this is just a label. */}
-                <a {...(user.bypass ? { role: "presentation" } : { href: "/api/auth/signout" })}>
+                <a {...(user.bypass ? { role: "presentation" } : { href: user.guest ? "/signin?callbackUrl=/projects" : "/api/auth/signout" })}>
                   <span className="bg-persona-2/15 text-foreground ring-persona-2 ring-1 flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-                    {initials(user.name ?? user.email)}
+                    {user.guest ? <UserRound size={16} aria-hidden /> : initials(user.name ?? user.email)}
                   </span>
                   <span className="grid min-w-0 leading-tight">
-                    <span className="truncate font-medium">{user.name ?? user.email}</span>
-                    <span className="text-muted-foreground truncate text-xs">{user.bypass ? "Dev auth bypass" : "Sign out"}</span>
+                    <span className="truncate font-medium">{user.guest ? "Guest demo" : (user.name ?? user.email)}</span>
+                    <span className="text-muted-foreground truncate text-xs">{user.bypass ? "Dev auth bypass" : user.guest ? "Sign in with GitHub" : "Sign out"}</span>
                   </span>
-                  {user.bypass ? null : <LogOut className="ml-auto" size={16} aria-hidden />}
+                  {user.bypass ? null : user.guest ? <LogIn className="ml-auto" size={16} aria-hidden /> : <LogOut className="ml-auto" size={16} aria-hidden />}
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -205,6 +205,16 @@ export function AppShell({ user, projects, defaultOpen, children }: { user: Shel
             <ThemeToggle />
           </div>
         </header>
+        {user.guest ? (
+          <div role="status" className="bg-primary/10 text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2 text-sm md:px-6">
+            <span>You are in a guest demo. Sign in with GitHub to keep your work.</span>
+            <Button asChild size="sm" variant="outline" className="h-7">
+              <a href="/signin?callbackUrl=/projects">
+                <LogIn aria-hidden /> Sign in
+              </a>
+            </Button>
+          </div>
+        ) : null}
         <div className="mx-auto w-full max-w-7xl p-4 md:p-6">{children}</div>
       </SidebarInset>
       <CommandPalette projectId={projectId} projects={projects} open={paletteOpen} onOpenChange={setPaletteOpen} />

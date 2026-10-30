@@ -109,6 +109,8 @@ function live(ctx: Partial<SessionContext> = {}) {
     speak(c: unknown, text: string): void;
     contradictWhileRunning(now: number): void;
     stopwatch: { input(atMs: number): unknown };
+    turns: { model?: { modelId: string } }[];
+    ledger: { model?: { modelId: string } }[];
   };
   any.state = "live";
   any.lastWallMs = Date.now();
@@ -142,6 +144,19 @@ describe("Judge Panel", () => {
     expect(speak).toMatchObject({ type: "judge.speak", kind: "interrupt" });
     // The interruption comes after the sentence's final transcript, never before it.
     expect(sent.findIndex((m) => m.type === "judge.speak")).toBeGreaterThan(sent.findIndex((m) => m.type === "transcript.final"));
+  });
+
+  it("tags every judge line and claim chip with the model that produced it", async () => {
+    const { sent, any } = live();
+    any.latency.push({ stepKey: "generate_summary", startMs: 1_000, endMs: 10_200, durationMs: 9_200, detector: "phash", inputHash: null, outputHash: null });
+    await any.onFinal(seg("The summary is instant.", 12_000, 13_500));
+    await new Promise((r) => setTimeout(r, 50));
+    const speak = sent.find((m) => m.type === "judge.speak");
+    const chip = sent.find((m) => m.type === "ledger.update");
+    expect(speak?.type === "judge.speak" && speak.model).toMatchObject({ modelId: "mock" });
+    expect(chip?.type === "ledger.update" && chip.claim.model).toMatchObject({ modelId: "mock" });
+    expect(any.turns[0]?.model).toMatchObject({ modelId: "mock" });
+    expect(any.ledger[0]?.model).toMatchObject({ modelId: "mock" });
   });
 });
 

@@ -16,6 +16,7 @@ import {
   type ServerMessage,
   type SessionSummary,
   type AuditFlag,
+  type ModelTag,
   type UiRegion,
 } from "@stage-ready/shared";
 import { hamming } from "@stage-ready/shared/ws-binary";
@@ -54,6 +55,8 @@ interface LedgerClaim extends PolicyClaim {
   pendingUntilMs: number | null;
   /** Set once a running step has already outlasted the promise, before its final measurement. */
   earlyContradicted?: boolean;
+  /** The model behind the current verdict (extraction, or the later verification). */
+  model?: ModelTag;
 }
 
 interface Turn {
@@ -63,7 +66,14 @@ interface Turn {
   text: string;
   trigger: string | null;
   answerSegmentLocalIds: string[];
+  model?: ModelTag;
 }
+
+const tagOf = (r: { modelId: string; latencyMs: number; fallback?: "budget" | "error" }): ModelTag => ({
+  modelId: r.modelId,
+  latencyMs: Math.max(0, Math.round(r.latencyMs)),
+  ...(r.fallback ? { fallback: r.fallback } : {}),
+});
 
 const mmss = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
 
@@ -101,13 +111,13 @@ export class LiveSession {
   private readonly turns: Turn[] = [];
   private readonly fixTasks = new Map<string, { title: string; detail: string; suggestedArtifact: string }>();
   private readonly personaLastTurn = new Map<string, number>();
-  private readonly queued: { personaId: string; text: string; kind: Turn["kind"]; trigger: string | null }[] = [];
+  private readonly queued: { personaId: string; text: string; kind: Turn["kind"]; trigger: string | null; model?: ModelTag }[] = [];
   private readonly coveredGapAsked = new Set<string>();
   private readonly stepCount = new Map<string, number>();
   private lastHash: bigint | null = null;
   private openStep: { startMs: number; key: string } | null = null;
   private lastInterruptAtMs: number | null = null;
-  private judgeSpeaking: { personaId: string; text: string; since: number; kind: Turn["kind"]; trigger: string | null } | null = null;
+  private judgeSpeaking: { personaId: string; text: string; since: number; kind: Turn["kind"]; trigger: string | null; model?: ModelTag } | null = null;
   private judgeSpeakTimer: NodeJS.Timeout | null = null;
   private answerTimer: NodeJS.Timeout | null = null;
   private currentAnswer: string[] = [];
@@ -234,7 +244,7 @@ export class LiveSession {
       startedAt: this.startedAt ?? new Date(),
       endedAt: new Date(),
       segments: this.segments,
-      claims: this.ledger.map((c) => ({ localId: c.id, segmentLocalId: c.segmentLocalId, text: c.text, type: c.type, status: c.status, verdict: c.verdict })),
+      claims: this.ledger.map((c) => ({ localId: c.id, segmentLocalId: c.segmentLocalId, text: c.text, type: c.type, status: c.status, verdict: c.verdict, ...(c.model ? { model: c.model } : {}) })),
       latency: this.latency.map((l) => ({
         stepKey: l.stepKey,
         startMs: Math.round(l.startMs),
@@ -387,22 +397,26 @@ export class LiveSession {
     for (const c of candidates) {
       const frames = this.frames.filter((f) => f.atMs >= c.claim.segmentStartMs && f.atMs <= c.atMs + 20_000).slice(-3);
       try {
-        const verdict = this.track(
-          await this.deps.ai.llm.generateObject(
-            prompts.showOrStrikeV1({ claim: c.text, claimAtMs: c.atMs, frames, actions: this.latency.map((l) => ({ stepKey: l.stepKey, startMs: l.startMs, durationMs: l.durationMs })) }),
-          ),
+        const result = await this.deps.ai.llm.generateObject(
+          prompts.showOrStrikeV1({ claim: c.text, claimAtMs: c.atMs, frames, actions: this.latency.map((l) => ({ stepKey: l.stepKey, startMs: l.startMs, durationMs: l.durationMs })) }),
         );
+        const verdict = this.track(result);
+        const model = tagOf(result);
         if (verdict.shown) {
-          this.updateClaim(c, { status: "verified", confidence: 0.7, evidence: [{ kind: "frame", ref: mmss(verdict.atMs ?? c.atMs), summary: verdict.summary }], suggestedRewrite: null });
+          this.updateClaim(c, { status: "verified", confidence: 0.7, evidence: [{ kind: "frame", ref: mmss(verdict.atMs ?? c.atMs), summary: verdict.summary }], suggestedRewrite: null }, model);
         } else {
           struck++;
           const feature = c.claim.featureName ?? c.text.replace(/[.!?]+$/, "");
-          this.updateClaim(c, {
-            status: "not_shown",
-            confidence: 0.7,
-            evidence: [{ kind: "frame", ref: "demo section", summary: verdict.summary }],
-            suggestedRewrite: "Add the step to the demo, or cut the line.",
-          });
+          this.updateClaim(
+            c,
+            {
+              status: "not_shown",
+              confidence: 0.7,
+              evidence: [{ kind: "frame", ref: "demo section", summary: verdict.summary }],
+              suggestedRewrite: "Add the step to the demo, or cut the line.",
+            },
+            model,
+          );
           this.fixTasks.set(`Show it or cut it: ${feature}`.slice(0, 120), {
             title: `Show it or cut it: ${feature}`.slice(0, 120),
             detail: `Mentioned at ${mmss(c.claim.segmentStartMs)} but never shown in the demo.`,
@@ -538,10 +552,13 @@ export class LiveSession {
 
   private async extractClaims(segment: Segment, received: number) {
     let extracted: Claim[] = [];
+    let model: ModelTag | undefined;
     try {
-      extracted = this.track(
-        await this.deps.ai.llm.generateObject(prompts.claimExtractV1({ sentence: segment.text, segmentStartMs: segment.startMs, context: this.segments.slice(-4, -1).map((s) => s.text) })),
-      ).claims;
+      const result = await this.deps.ai.llm.generateObject(
+        prompts.claimExtractV1({ sentence: segment.text, segmentStartMs: segment.startMs, context: this.segments.slice(-4, -1).map((s) => s.text) }),
+      );
+      extracted = this.track(result).claims;
+      model = tagOf(result);
     } catch (error) {
       this.deps.logger.warn({ err: error }, "claim extraction failed");
       this.send({ type: "error", code: "claim_extract_failed", message: "A sentence could not be checked for claims." });
@@ -560,10 +577,11 @@ export class LiveSession {
         segmentLocalId: segment.id,
         claim,
         pendingUntilMs: rule?.pending ? segment.endMs + RECHECK_WINDOW_MS : null,
+        ...(model ? { model } : {}),
       };
       if (rule?.fixTask) this.fixTasks.set(rule.fixTask.title, rule.fixTask);
       this.ledger.push(entry);
-      this.send({ type: "ledger.update", claim: { id: entry.id, text: entry.text, type: entry.type, status: entry.status, segmentStartMs: segment.startMs }, verdict });
+      this.send({ type: "ledger.update", claim: { id: entry.id, text: entry.text, type: entry.type, status: entry.status, segmentStartMs: segment.startMs, ...(model ? { model } : {}) }, verdict });
       this.send({ type: "metric", path: "claim_chip", ms: Date.now() - received });
       if (!rule && this.deps.ai.mode === "meta") void this.verifyWithModel(entry);
     }
@@ -571,29 +589,31 @@ export class LiveSession {
 
   private async verifyWithModel(entry: LedgerClaim) {
     try {
-      const verdict = enforceEvidenceRule(
-        this.track(
-          await this.deps.ai.llm.generateObject(
-            prompts.claimVerifyV1({
-              claim: entry.claim,
-              latency: this.latency.map((l) => ({ stepKey: l.stepKey, durationMs: l.durationMs })),
-              frames: [],
-              uiStates: this.latestRegions,
-              repoChunks: (this.ctx.repo?.capabilities ?? []).slice(0, 30).map((c) => ({ ref: c.ref, text: c.summary })),
-            }),
-          ),
-        ),
+      const result = await this.deps.ai.llm.generateObject(
+        prompts.claimVerifyV1({
+          claim: entry.claim,
+          latency: this.latency.map((l) => ({ stepKey: l.stepKey, durationMs: l.durationMs })),
+          frames: [],
+          uiStates: this.latestRegions,
+          repoChunks: (this.ctx.repo?.capabilities ?? []).slice(0, 30).map((c) => ({ ref: c.ref, text: c.summary })),
+        }),
       );
-      if (verdict.status !== entry.status || verdict.evidence.length > 0) this.updateClaim(entry, verdict);
+      const verdict = enforceEvidenceRule(this.track(result));
+      if (verdict.status !== entry.status || verdict.evidence.length > 0) this.updateClaim(entry, verdict, tagOf(result));
     } catch (error) {
       this.deps.logger.warn({ err: error }, "claim verification failed");
     }
   }
 
-  private updateClaim(entry: LedgerClaim, verdict: ClaimVerdict) {
+  private updateClaim(entry: LedgerClaim, verdict: ClaimVerdict, model?: ModelTag) {
     entry.verdict = verdict;
     entry.status = verdict.status;
-    this.send({ type: "ledger.update", claim: { id: entry.id, text: entry.text, type: entry.type, status: entry.status, segmentStartMs: entry.claim.segmentStartMs }, verdict });
+    if (model) entry.model = model;
+    this.send({
+      type: "ledger.update",
+      claim: { id: entry.id, text: entry.text, type: entry.type, status: entry.status, segmentStartMs: entry.claim.segmentStartMs, ...(entry.model ? { model: entry.model } : {}) },
+      verdict,
+    });
     // Judges only cut in at a sentence boundary: decide now if the presenter is silent, else at the next final.
     if (this.state === "live" && this.vad.speechSince === null) void this.decide({});
   }
@@ -605,7 +625,7 @@ export class LiveSession {
     this.answerTimer = setTimeout(() => {
       if (this.state === "ended" || this.judgeSpeaking) return;
       const queued = this.queued.shift();
-      if (queued) return void this.speak({ ...queued, kind: this.state === "qa" ? "question" : queued.kind, detail: "" }, queued.text);
+      if (queued) return void this.speak({ ...queued, kind: this.state === "qa" ? "question" : queued.kind, detail: "" }, queued.text, queued.model);
       if (this.state === "qa") {
         // The next question waits for an answer to the last one; only the opening question goes first.
         const asked = this.turns.some((t) => t.kind === "question" || t.trigger === "qa_phase");
@@ -650,21 +670,20 @@ export class LiveSession {
         qaTurnDue: opts.qaTurnDue ?? false,
       }).map((c) => (c.trigger === "qa_phase" ? { ...c, detail: this.qaQuestion(c.personaId) } : c));
       if (list.length === 0) return;
-      const turn = this.track(
-        await this.deps.ai.llm.generateObject(
-          prompts.judgeTurnV1({
-            eventName: this.ctx.eventName,
-            difficulty: this.difficulty,
-            candidates: this.ctx.personas
-              .filter((p) => list.some((c) => c.personaId === p.id))
-              .map((p) => ({ personaId: p.id, role: PERSONA_ROLE_LABEL[p.role], questionStyle: p.questionStyle, criteria: p.criteriaWeights })),
-            triggers: list.slice(0, 4).map((c) => ({ trigger: c.trigger, detail: c.detail, personaId: c.personaId })),
-            recentTranscript: this.segments.slice(-8).map((s) => s.text),
-            sectionKey: this.section()?.key ?? null,
-            phase,
-          }),
-        ),
+      const result = await this.deps.ai.llm.generateObject(
+        prompts.judgeTurnV1({
+          eventName: this.ctx.eventName,
+          difficulty: this.difficulty,
+          candidates: this.ctx.personas
+            .filter((p) => list.some((c) => c.personaId === p.id))
+            .map((p) => ({ personaId: p.id, role: PERSONA_ROLE_LABEL[p.role], questionStyle: p.questionStyle, criteria: p.criteriaWeights })),
+          triggers: list.slice(0, 4).map((c) => ({ trigger: c.trigger, detail: c.detail, personaId: c.personaId })),
+          recentTranscript: this.segments.slice(-8).map((s) => s.text),
+          sectionKey: this.section()?.key ?? null,
+          phase,
+        }),
       );
+      const turn = this.track(result);
       // Re-check what the model chose against what the policy allowed.
       const chosen = list.find((c) => c.personaId === turn.personaId && (turn.trigger === null || c.trigger === turn.trigger));
       if (!turn.interrupt || !chosen || !turn.text || this.judgeSpeaking || (this.state as string) === "ended") return;
@@ -678,6 +697,7 @@ export class LiveSession {
           ...(chosen.claimId ? { claimId: chosen.claimId } : {}),
         },
         turn.text,
+        tagOf(result),
       );
     } catch (error) {
       this.deps.logger.warn({ err: error }, "judge decision failed");
@@ -697,9 +717,9 @@ export class LiveSession {
     return (QA_PROMPTS[persona.role] ?? QA_PROMPTS.technical!)(criterion);
   }
 
-  private speak(c: Pick<Candidate, "personaId" | "detail"> & { kind: Turn["kind"]; trigger: string | null; claimId?: string }, text: string) {
+  private speak(c: Pick<Candidate, "personaId" | "detail"> & { kind: Turn["kind"]; trigger: string | null; claimId?: string }, text: string, model?: ModelTag) {
     const now = this.now();
-    this.judgeSpeaking = { personaId: c.personaId, text, since: now, kind: c.kind, trigger: c.trigger };
+    this.judgeSpeaking = { personaId: c.personaId, text, since: now, kind: c.kind, trigger: c.trigger, ...(model ? { model } : {}) };
     this.personaLastTurn.set(c.personaId, now);
     if (c.kind === "interrupt") this.lastInterruptAtMs = now;
     if (c.claimId) {
@@ -710,10 +730,10 @@ export class LiveSession {
     if (c.trigger === "over_time") this.overTimeAsked.add(this.section()?.key ?? "");
     this.currentAnswer = [];
     this.currentAnswerIds = [];
-    const turn: Turn = { personaId: c.personaId, atMs: Math.round(now), kind: c.kind, text, trigger: c.trigger, answerSegmentLocalIds: [] };
+    const turn: Turn = { personaId: c.personaId, atMs: Math.round(now), kind: c.kind, text, trigger: c.trigger, answerSegmentLocalIds: [], ...(model ? { model } : {}) };
     this.turns.push(turn);
     this.currentAnswerIds = turn.answerSegmentLocalIds;
-    this.send({ type: "judge.speak", personaId: c.personaId, text, audioStreamId: null, kind: c.kind, trigger: c.trigger });
+    this.send({ type: "judge.speak", personaId: c.personaId, text, audioStreamId: null, kind: c.kind, trigger: c.trigger, ...(model ? { model } : {}) });
     // If the browser never reports playback ending, assume ~2.5 words per second plus a pause.
     if (this.judgeSpeakTimer) clearTimeout(this.judgeSpeakTimer);
     this.judgeSpeakTimer = setTimeout(() => this.judgeDone(), 1_500 + text.split(/\s+/).length * 400);
@@ -730,7 +750,7 @@ export class LiveSession {
     const speaking = this.judgeSpeaking;
     if (!speaking) return;
     this.deps.logger.info({ reason, personaId: speaking.personaId }, "judge yielded");
-    this.queued.push({ personaId: speaking.personaId, text: speaking.text, kind: speaking.kind, trigger: speaking.trigger });
+    this.queued.push({ personaId: speaking.personaId, text: speaking.text, kind: speaking.kind, trigger: speaking.trigger, ...(speaking.model ? { model: speaking.model } : {}) });
     this.send({ type: "judge.yield", personaId: speaking.personaId, queuedQuestion: speaking.text });
     this.judgeDone();
   }

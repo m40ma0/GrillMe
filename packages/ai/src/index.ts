@@ -2,6 +2,7 @@ import type { ModelConfig } from "@stage-ready/config";
 import type { Logger } from "pino";
 import { MetaModelAdapter, type ReasoningEffort } from "./meta";
 import { MockModelAdapter } from "./mock";
+import { BudgetedLLM, type SpendStore } from "./budget";
 import { parsePrices } from "./telemetry";
 import { MetaImageAdapter } from "./image";
 import { AiError, metaApiKey, type ImageGen, type LLM } from "./types";
@@ -22,6 +23,7 @@ export * from "./takes";
 export * from "./qa";
 export * from "./sam";
 export * from "./telemetry";
+export { BudgetedLLM, type DemoLimits, type SpendStore } from "./budget";
 
 export interface Ai {
   llm: LLM;
@@ -60,6 +62,25 @@ export function createAi(config: Partial<ModelConfig> & Pick<ModelConfig, "META_
   );
   const image = config.MODEL_IMAGE ? new MetaImageAdapter({ baseUrl: config.META_API_BASE_URL as string, apiKey, model: config.MODEL_IMAGE }, logger) : null;
   return { llm, image, mode: "meta", reason: null };
+}
+
+/**
+ * The adapter for Demo Mode projects: the real models within the daily allowance (DEMO_LIVE_MODELS,
+ * DEMO_DAILY_BUDGET_USD, DEMO_DAILY_CALL_LIMIT), else the mocks. Generated title-card art stays off in
+ * Demo Mode, so renders of the fixture takes are reproducible.
+ */
+export function createDemoAi(
+  config: Partial<Pick<ModelConfig, "DEMO_LIVE_MODELS" | "DEMO_DAILY_BUDGET_USD" | "DEMO_DAILY_CALL_LIMIT">> & { NODE_ENV?: string },
+  live: Ai,
+  mock: Ai,
+  store: SpendStore,
+  logger: Logger,
+): Ai {
+  const enabled = config.DEMO_LIVE_MODELS ?? config.NODE_ENV === "production";
+  if (!enabled) return mock;
+  if (live.mode !== "meta") return { ...mock, reason: live.reason };
+  const llm = new BudgetedLLM(live.llm, mock.llm, store, { budgetUsd: config.DEMO_DAILY_BUDGET_USD ?? 5, maxCalls: config.DEMO_DAILY_CALL_LIMIT ?? 1500 }, logger);
+  return { llm, image: null, mode: "meta", reason: null };
 }
 
 /** Spark low and Wonder high unless .env says otherwise; META_REASONING_EFFORT is the older setting for Wonder. */

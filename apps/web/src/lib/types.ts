@@ -125,14 +125,21 @@ export interface SessionReviewDTO {
     suggestedRewrite: string | null;
     atMs: number | null;
     evidence: { kind: string; ref: string; summary: string }[];
+    model: ModelRefDTO | null;
   }[];
   latency: {
     samples: { stepKey: string; startMs: number; durationMs: number; detector: string }[];
     acrossRehearsals: { stepKey: string; n: number; p50: number | null; p95: number | null; thisSession: number | null }[];
   };
-  turns: { id: string; atMs: number; kind: string; trigger: string | null; text: string; persona: string; answer: string }[];
+  turns: { id: string; atMs: number; kind: string; trigger: string | null; text: string; persona: string; answer: string; model: ModelRefDTO | null }[];
   transcript: { id: string; startMs: number; endMs: number; speaker: string; text: string }[];
-  coachNote: { resolved: CoachItemDTO[]; open: CoachItemDTO[]; newIssues: CoachItemDTO[]; nextPlan: string[] } | null;
+  coachNote: { resolved: CoachItemDTO[]; open: CoachItemDTO[]; newIssues: CoachItemDTO[]; nextPlan: string[]; model: ModelRefDTO | null } | null;
+}
+
+/** Which model produced an item ("mock" when mocked), for its attribution caption. */
+export interface ModelRefDTO {
+  modelId: string;
+  latencyMs: number | null;
 }
 
 export interface ProgressDTO {
@@ -141,6 +148,8 @@ export interface ProgressDTO {
   trends: { sessionId: string; label: string; startedAt: string | null; score: number | null; criteria: Record<string, number> }[];
   history: { sessionId: string | null; createdAt: string; resolved: CoachItemDTO[]; open: CoachItemDTO[]; newIssues: CoachItemDTO[] }[];
   nextPlan: string[];
+  /** The model that wrote the latest plan. */
+  nextPlanModel: ModelRefDTO | null;
 }
 
 // ---------- Director (F5) ----------
@@ -206,6 +215,7 @@ export interface QuestionDTO {
   askedCount: number;
   lastScore: number | null;
   sourceRefs: string[];
+  model: ModelRefDTO | null;
   card: { id: string; script: string; bridgeLine: string; evidenceRefs: string[] } | null;
   slide: { id: string; verification: "passed" | "failed" | "fallback" | null; snapshot: SlideSnapshot; hasPng: boolean } | null;
 }

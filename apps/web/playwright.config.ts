@@ -21,7 +21,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: /demoguard\.spec\.ts/,
+      testIgnore: /(demoguard|guest)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 1000 },
@@ -35,6 +35,12 @@ export default defineConfig({
           ],
         },
       },
+    },
+    {
+      // Signed-out visitors: a second web server on :3100 without the dev auth bypass, as in production.
+      name: "guest",
+      testMatch: /guest\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 }, baseURL: process.env.E2E_GUEST_BASE_URL ?? "http://localhost:3100" },
     },
     {
       // DemoGuard watches a different fake screen: a step result, then an injected error dialog.
@@ -56,5 +62,18 @@ export default defineConfig({
   ],
   ...(process.env.E2E_BASE_URL
     ? {}
-    : { webServer: { command: "pnpm --dir ../.. dev", url: "http://localhost:3000/api/health", reuseExistingServer: true, timeout: 180_000, stdout: "ignore" as const, stderr: "pipe" as const } }),
+    : {
+        webServer: [
+          { command: "pnpm --dir ../.. dev", url: "http://localhost:3000/api/health", reuseExistingServer: true, timeout: 180_000, stdout: "ignore" as const, stderr: "pipe" as const },
+          {
+            command: "pnpm exec next dev --port 3100",
+            url: "http://localhost:3100/api/health",
+            reuseExistingServer: true,
+            timeout: 180_000,
+            stdout: "ignore" as const,
+            stderr: "pipe" as const,
+            env: { DEV_AUTH_BYPASS: "false", AUTH_GITHUB_ID: "e2e-placeholder", AUTH_GITHUB_SECRET: "e2e-placeholder" },
+          },
+        ],
+      }),
 });

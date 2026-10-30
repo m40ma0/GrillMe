@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/server/auth";
 import { loadBundle, loadOverviewExtras, requireProject } from "@/lib/server/projects";
+import { ModelCaption } from "@/components/app/model-caption";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -168,6 +169,7 @@ export default async function ProjectOverview({ params }: { params: Promise<{ pr
                     </div>
                   ) : null,
                 )}
+                <ModelCaption modelId={extras.coachNote.model?.modelId} latencyMs={extras.coachNote.model?.latencyMs ?? null} />
               </div>
             ) : (
               <EmptyState icon={NotebookPen}>Coach Notes are written after each rehearsal.</EmptyState>

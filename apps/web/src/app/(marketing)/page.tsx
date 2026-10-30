@@ -1,5 +1,6 @@
-import { ArrowRight, FileCheck2, Play, ShieldCheck, Sparkles, Video } from "lucide-react";
+import { ArrowRight, FileCheck2, Play, ShieldCheck, Video } from "lucide-react";
 import Link from "next/link";
+import { StageReadyMark } from "@/components/app/stage-ready-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,9 +21,7 @@ export default function Landing() {
     <div className="mx-auto grid max-w-7xl gap-12 px-4 py-6 md:px-6">
       <header className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 font-semibold">
-          <span className="bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-lg">
-            <Sparkles size={16} aria-hidden />
-          </span>
+          <StageReadyMark title={null} />
           Stage Ready
         </span>
         <div className="flex items-center gap-2">
@@ -50,13 +49,23 @@ export default function Landing() {
               </Link>
             </Button>
           </div>
-          <p className="text-muted-foreground text-xs">Demo Mode opens a fictional project and runs without API keys.</p>
+          <p className="text-muted-foreground text-xs">No sign-up: Demo Mode opens a fictional project in a guest workspace for 24 hours.</p>
         </div>
         <figure className="bg-muted overflow-hidden rounded-xl border">
-          {/* The 20-second product clip is recorded with Stage Ready's own Director in M6. */}
-          <div className="flex aspect-video items-center justify-center p-6 text-center">
-            <p className="text-muted-foreground">Product clip: recorded with the Director before launch.</p>
-          </div>
+          {/* Recorded from the real app in Demo Mode (pnpm --filter @stage-ready/web clip); captions are burned in. */}
+          <video
+            className="aspect-video w-full"
+            src="/clip.mp4"
+            poster="/clip-poster.jpg"
+            width={1280}
+            height={720}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            aria-label="A 20-second tour of Stage Ready in Demo Mode: one click into a fictional project, judges interrupting while the Claim Auditor contradicts a claim, the Q&A Kit, the Director and DemoGuard."
+          />
         </figure>
       </section>
       <section className="grid gap-4 md:grid-cols-3" aria-label="Features">
