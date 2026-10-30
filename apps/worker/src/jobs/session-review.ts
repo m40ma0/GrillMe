@@ -46,6 +46,32 @@ export function weakSpots(input: {
   return [...new Map(items.map((i) => [i.key, i])).values()];
 }
 
+/**
+ * Weak-spot keys this session re-checked and passed: a claim said again and verified, a criterion covered,
+ * a step re-measured within budget, a Q&A round without follow-ups. Only these can resolve an earlier item.
+ */
+export function passedChecks(input: {
+  claims: { text: string; status: string }[];
+  coverage: Record<string, Record<string, number>>;
+  criteria: string[];
+  latency: { stepKey: string; durationMs: number }[];
+  questionsAsked: number;
+  followUps: number;
+}): Set<string> {
+  const passed = new Set<string>();
+  for (const c of input.claims) if (c.status === "verified") passed.add(`claim:${keyOf(c.text)}`);
+  for (const name of input.criteria) {
+    const total = Object.values(input.coverage[name] ?? {}).reduce((a, b) => a + b, 0);
+    if (total >= 0.25) passed.add(`criterion:${keyOf(name)}`);
+  }
+  for (const stepKey of new Set(input.latency.map((l) => l.stepKey))) {
+    const { p95 } = latencySummary(input.latency.filter((l) => l.stepKey === stepKey).map((l) => l.durationMs));
+    if (p95 !== null && p95 <= DEFAULT_STEP_BUDGET_MS) passed.add(`slow:${stepKey}`);
+  }
+  if (input.questionsAsked > 0 && input.followUps === 0) passed.add("qa:vague");
+  return passed;
+}
+
 export async function sessionReview(payload: Payload, ctx: JobContext) {
   const { db } = ctx;
   const [session] = await db
@@ -87,7 +113,9 @@ export async function sessionReview(payload: Payload, ctx: JobContext) {
   const [spec] = await db.select({ id: eventSpecs.id }).from(eventSpecs).where(eq(eventSpecs.projectId, project.id));
   const criteriaRows = spec ? await db.select({ name: criteria.name }).from(criteria).where(eq(criteria.eventSpecId, spec.id)) : [];
   const latency = await db.select({ stepKey: latencySamples.stepKey, durationMs: latencySamples.durationMs }).from(latencySamples).where(eq(latencySamples.sessionId, session.id));
-  const followUps = (await db.select({ kind: judgeTurns.kind }).from(judgeTurns).where(eq(judgeTurns.sessionId, session.id))).filter((t) => t.kind === "follow_up").length;
+  const turnKinds = await db.select({ kind: judgeTurns.kind }).from(judgeTurns).where(eq(judgeTurns.sessionId, session.id));
+  const followUps = turnKinds.filter((t) => t.kind === "follow_up").length;
+  const questionsAsked = turnKinds.filter((t) => t.kind === "question").length;
   const summary = (session.summary ?? {}) as Partial<SessionSummary>;
   const coverage = (session.rubricHeatmap ?? {}) as Record<string, Record<string, number>>;
   const current = weakSpots({ claims: claimRows, coverage, criteria: criteriaRows.map((c) => c.name), latency, followUps, flags: summary.flags ?? [] });
@@ -98,7 +126,8 @@ export async function sessionReview(payload: Payload, ctx: JobContext) {
     .where(and(eq(coachNotes.projectId, project.id), ne(coachNotes.sessionId, session.id)))
     .orderBy(desc(coachNotes.createdAt))
     .limit(1);
-  const diff = diffWeakSpots(previous ? [...toCoachItems(previous.open), ...toCoachItems(previous.newIssues)] : [], current);
+  const passed = passedChecks({ claims: claimRows, coverage, criteria: criteriaRows.map((c) => c.name), latency, questionsAsked, followUps });
+  const diff = diffWeakSpots(previous ? [...toCoachItems(previous.open), ...toCoachItems(previous.newIssues), ...toCoachItems(previous.notRetested)] : [], current, passed);
 
   // Memory: the most relevant earlier notes by embedding when available, else the most recent.
   const embedder = ai.mode === "meta" ? createEmbedder(ctx.env) : null;
@@ -145,6 +174,7 @@ export async function sessionReview(payload: Payload, ctx: JobContext) {
       resolved: diff.resolved,
       open: diff.open,
       newIssues: diff.newIssues,
+      notRetested: diff.notRetested,
       nextPlan: plan.nextPlan,
       embedding,
       modelId,
@@ -194,7 +224,7 @@ async function demoGuardReview(sessionId: string, projectId: string, ctx: JobCon
         .set({ newIssues: [...toCoachItems(latest.newIssues), ...added] })
         .where(eq(coachNotes.id, latest.id));
   } else {
-    await db.insert(coachNotes).values({ projectId, sessionId, resolved: [], open: [], newIssues: items, nextPlan: heuristicPlan({ resolved: [], open: [], newIssues: items }, []) });
+    await db.insert(coachNotes).values({ projectId, sessionId, resolved: [], open: [], newIssues: items, nextPlan: heuristicPlan({ resolved: [], open: [], newIssues: items, notRetested: [] }, []) });
   }
   const openTasks = await db
     .select({ title: fixTasks.title })

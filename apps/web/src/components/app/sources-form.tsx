@@ -1,15 +1,18 @@
 "use client";
 import { Send } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useLatestJob } from "@/hooks/use-job";
 import { api } from "@/lib/api-client";
 import { ErrorAlert } from "./error-alert";
 import { JobProgress } from "./job-progress";
 
 /** URLs or pasted text → a background job with visible progress. Used for the event page and past winners. */
 export function SourcesForm({
+  projectId,
+  jobName,
   endpoint,
   urlLabel,
   textLabel,
@@ -17,6 +20,9 @@ export function SourcesForm({
   jobTitle,
   onDone,
 }: {
+  projectId: string;
+  /** The job kind this form starts, so a running one is picked back up after a reload. */
+  jobName: "event-ingest" | "winners";
   endpoint: string;
   urlLabel: string;
   textLabel: string;
@@ -29,6 +35,11 @@ export function SourcesForm({
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [pending, setPending] = useState(false);
+  const latest = useLatestJob(projectId, jobName, jobId === null);
+  useEffect(() => {
+    const job = latest.data?.job;
+    if (jobId === null && job && job.state !== "completed") setJobId(job.id);
+  }, [latest.data, jobId]);
   const urlList = urls
     .split(/\s+/)
     .map((u) => u.trim())
@@ -42,6 +53,7 @@ export function SourcesForm({
       setJobId(id);
     } catch (e) {
       setError(e);
+      void latest.refetch();
     } finally {
       setPending(false);
     }

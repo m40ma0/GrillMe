@@ -63,3 +63,20 @@ test("the app icon, favicon and web manifest are served", async ({ request }) =>
   const html = await (await request.get("/")).text();
   expect(html).toMatch(/<link rel="icon" href="\/icon\.svg/);
 });
+
+test("a rehearsal whose screen capture is blocked leaves no session behind", async ({ page }) => {
+  // This project runs without fake media devices, so the browser refuses screen capture.
+  await page.goto("/");
+  await page.getByRole("button", { name: /Try Demo Mode/ }).click();
+  await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
+  const base = new URL(page.url()).pathname;
+  await page.goto(`${base}/sessions`);
+  const before = await page.getByRole("table").getByRole("row").count();
+  await page.goto(`${base}/rehearse`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /Start rehearsal/ }).click();
+  await page.getByLabel("I consent to recording this session.").check();
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByText(/blocked|Permission denied|not allowed|NotAllowed|not supported/i).first()).toBeVisible({ timeout: 20_000 });
+  await page.goto(`${base}/sessions`);
+  await expect(page.getByRole("table").getByRole("row")).toHaveCount(before);
+});

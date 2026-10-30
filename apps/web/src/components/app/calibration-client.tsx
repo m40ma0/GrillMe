@@ -61,6 +61,8 @@ export function CalibrationClient({ bundle }: { bundle: ProjectBundle }) {
             <summary className="text-primary cursor-pointer text-sm">Add winners</summary>
             <div className="mt-4">
               <SourcesForm
+                projectId={bundle.project.id}
+                jobName="winners"
                 endpoint={`/api/projects/${bundle.project.id}/winners`}
                 urlLabel="Winner or results page URLs"
                 textLabel="Or paste the winner text"

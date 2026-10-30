@@ -37,9 +37,18 @@ export function parseReply<T>(text: string, schema: ZodType<T, ZodTypeDef, unkno
   return result.success ? { ok: true, value: result.data } : { ok: false, error: formatZodError(result.error) };
 }
 
+/**
+ * Breaks model special-token syntax ("<|box;…|>", "<|endoftext|>") in untrusted text, so quoted code or
+ * pages cannot be read as control tokens (the suspected cause of HTTP 400 on some repo digests).
+ */
+export function neutralizeSpecialTokens(text: string): string {
+  return text.replaceAll("<|", "<\u200B|").replaceAll("|>", "|\u200B>");
+}
+
 /** Wraps untrusted content so the model treats it as quoted data. */
 export function quoted(label: string, content: string, maxChars = 60_000): string {
-  const body = content.length > maxChars ? `${content.slice(0, maxChars)}\n[truncated]` : content;
+  const clipped = content.length > maxChars ? `${content.slice(0, maxChars)}\n[truncated]` : content;
+  const body = neutralizeSpecialTokens(clipped);
   return `<${label}>\n${body.replaceAll(`</${label}>`, `<\\/${label}>`)}\n</${label}>`;
 }
 

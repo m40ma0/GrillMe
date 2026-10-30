@@ -1,5 +1,5 @@
 "use client";
-import { DEFAULT_STEP_BUDGET_MS, formatSeconds, type ClaimStatus } from "@stage-ready/shared";
+import { DEFAULT_STEP_BUDGET_MS, formatSeconds, type ClaimStatus, modelUseLabel } from "@stage-ready/shared";
 import { useQuery } from "@tanstack/react-query";
 import { NotebookPen } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -50,9 +50,10 @@ function CoachNotes({ data }: { data: SessionReviewDTO }) {
   if (!note) return <EmptyState icon={NotebookPen}>Coach Notes are being written from this session and your earlier ones.</EmptyState>;
   return (
     <div className="grid gap-4">
-      <CoachList title="Resolved since last time" items={note.resolved} />
+      <CoachList title="Resolved since last time (re-checked)" items={note.resolved} />
       <CoachList title="Still open" items={note.open} />
       <CoachList title="New this session" items={note.newIssues} />
+      <CoachList title="Not re-tested" items={note.notRetested} />
       <div>
         <h3 className="mb-1 text-sm font-medium">Next session</h3>
         <ol className="list-decimal pl-5">
@@ -148,8 +149,7 @@ export function SessionReview({ data }: { data: SessionReviewDTO }) {
             <CardDescription>
               {s ? (
                 <>
-                  <span className="font-mono tabular-nums">{formatSeconds(s.durationMs)}</span> · {s.interruptions} interruption{s.interruptions === 1 ? "" : "s"} · model cost{" "}
-                  {s.modelCostUsd === null ? "unknown" : `$${s.modelCostUsd.toFixed(4)}`}
+                  <span className="font-mono tabular-nums">{formatSeconds(s.durationMs)}</span> · {s.interruptions} interruption{s.interruptions === 1 ? "" : "s"} · {modelUseLabel(s)}
                 </>
               ) : (
                 "This session has no summary yet."

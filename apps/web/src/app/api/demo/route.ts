@@ -1,5 +1,6 @@
 import { seedDemoProject } from "@stage-ready/db/seed";
 import { cookies } from "next/headers";
+import { logger } from "@/lib/server/ai";
 import { ApiError, isNavigation, navigationErrorResponse } from "@/lib/server/api";
 import { getCurrentUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
@@ -29,6 +30,7 @@ export async function POST(req: Request) {
     // Relative Location: the dev server binds 0.0.0.0, which req.url would leak into the redirect.
     return new Response(null, { status: 303, headers: { location: `/projects/${projectId}` } });
   } catch (error) {
+    if (!(error instanceof ApiError)) logger.error({ err: error }, "demo project could not be created");
     if (isNavigation(req)) return navigationErrorResponse(error, req);
     const status = error instanceof ApiError ? error.status : 500;
     return Response.json(

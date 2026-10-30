@@ -152,9 +152,10 @@ export default async function ProjectOverview({ params }: { params: Promise<{ pr
               <div className="grid gap-3">
                 {(
                   [
-                    ["Resolved", extras.coachNote.resolved],
+                    ["Resolved (re-checked)", extras.coachNote.resolved],
                     ["Still open", extras.coachNote.open],
                     ["New", extras.coachNote.newIssues],
+                    ["Not re-tested", extras.coachNote.notRetested],
                     ["Next session", extras.coachNote.nextPlan],
                   ] as const
                 ).map(([label, items]) =>

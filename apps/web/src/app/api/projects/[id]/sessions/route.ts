@@ -6,6 +6,7 @@ import { ApiError, body, route } from "@/lib/server/api";
 import { db } from "@/lib/server/db";
 import { env } from "@/lib/server/env";
 import { requireProject } from "@/lib/server/projects";
+import { pruneOrphanSessions } from "@/lib/server/sessions";
 
 /** Creates a rehearsal or DemoGuard session and a WebSocket token valid for 15 minutes, scoped to it. */
 export const POST = route<{ id: string }>(
@@ -21,6 +22,7 @@ export const POST = route<{ id: string }>(
       const judges = await db().select({ id: personas.id }).from(personas).where(eq(personas.projectId, project.id));
       if (judges.length === 0) throw new ApiError(409, "no_personas", "Build the judge personas in Calibration first.");
     }
+    await pruneOrphanSessions(project.id);
     const [session] = await db()
       .insert(sessions)
       .values({

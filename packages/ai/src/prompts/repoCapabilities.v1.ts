@@ -8,7 +8,14 @@ export interface RepoChunk {
   text: string;
 }
 
-export function repoCapabilitiesV1(input: { githubFullName: string; readme: string | null; dependencies: string[]; chunks: RepoChunk[]; findings: RepoFinding[] }): Prompt<RepoCapabilities> {
+export function repoCapabilitiesV1(input: {
+  githubFullName: string;
+  readme: string | null;
+  dependencies: string[];
+  chunks: RepoChunk[];
+  findings: RepoFinding[];
+  maxChunkChars?: number;
+}): Prompt<RepoCapabilities> {
   return {
     id: "repoCapabilities",
     version: 1,
@@ -23,7 +30,7 @@ export function repoCapabilitiesV1(input: { githubFullName: string; readme: stri
       `Repository: ${input.githubFullName}`,
       quoted("readme", input.readme ?? "(none)", 8_000),
       quoted("dependencies", input.dependencies.join("\n"), 8_000),
-      quoted("code_chunks", input.chunks.map((c) => `--- ${c.path} (startLine ${c.startLine})\n${c.text}`).join("\n"), 90_000),
+      quoted("code_chunks", input.chunks.map((c) => `--- ${c.path} (startLine ${c.startLine})\n${c.text}`).join("\n"), input.maxChunkChars ?? 90_000),
     ].join("\n\n"),
     // Without a model nothing reads the code paths, so the mock claims no capabilities beyond what the scan found.
     mock: () => ({

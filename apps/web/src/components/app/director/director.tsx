@@ -159,6 +159,9 @@ export function Director({ projectId, initial }: { projectId: string; initial: D
       await fn();
     } catch (e) {
       toast.error((e as Error).message);
+      // The request may have failed after the server queued the work (a network blip): reload the
+      // server's state, so a render that did start shows its progress.
+      void refresh();
     } finally {
       setBusy(null);
     }

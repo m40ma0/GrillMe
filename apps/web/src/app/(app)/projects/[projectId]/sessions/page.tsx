@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getCurrentUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { requireProject } from "@/lib/server/projects";
+import { pruneOrphanSessions } from "@/lib/server/sessions";
 
 export const metadata: Metadata = { title: "Sessions" };
 
@@ -20,7 +21,9 @@ export default async function SessionsPage({ params }: { params: Promise<{ proje
   const user = await getCurrentUser();
   if (!user) return null;
   const project = await requireProject(user.id, projectId);
-  const rows = await db().select().from(sessions).where(eq(sessions.projectId, project.id)).orderBy(desc(sessions.createdAt));
+  await pruneOrphanSessions(project.id);
+  // Rehearsals that never started have no start time; they are not sessions yet. DemoGuard runs are kept.
+  const rows = (await db().select().from(sessions).where(eq(sessions.projectId, project.id)).orderBy(desc(sessions.createdAt))).filter((s) => s.startedAt !== null || s.mode === "demoguard");
   return (
     <div className="grid gap-6">
       <PageHeader title="Sessions" description="Every recorded rehearsal for this project." />

@@ -72,7 +72,7 @@ export default defineConfig({
             timeout: 180_000,
             stdout: "ignore" as const,
             stderr: "pipe" as const,
-            env: { DEV_AUTH_BYPASS: "false", AUTH_GITHUB_ID: "e2e-placeholder", AUTH_GITHUB_SECRET: "e2e-placeholder" },
+            env: { DEV_AUTH_BYPASS: "false", AUTH_GITHUB_ID: "e2e-placeholder", AUTH_GITHUB_SECRET: "e2e-placeholder", NEXT_DIST_DIR: ".next-guest" },
           },
         ],
       }),

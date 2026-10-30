@@ -71,6 +71,8 @@ export interface RepoDTO {
   digestTokens: number | null;
   findingCounts: Partial<Record<RepoFinding["kind"], number>>;
   topFindings: (RepoFinding & { id: string })[];
+  /** Why the capability pass failed; the deterministic findings are still there. */
+  capabilitiesError: string | null;
 }
 
 export interface PersonaDTO extends Persona {
@@ -133,7 +135,7 @@ export interface SessionReviewDTO {
   };
   turns: { id: string; atMs: number; kind: string; trigger: string | null; text: string; persona: string; answer: string; model: ModelRefDTO | null }[];
   transcript: { id: string; startMs: number; endMs: number; speaker: string; text: string }[];
-  coachNote: { resolved: CoachItemDTO[]; open: CoachItemDTO[]; newIssues: CoachItemDTO[]; nextPlan: string[]; model: ModelRefDTO | null } | null;
+  coachNote: { resolved: CoachItemDTO[]; open: CoachItemDTO[]; newIssues: CoachItemDTO[]; notRetested: CoachItemDTO[]; nextPlan: string[]; model: ModelRefDTO | null } | null;
 }
 
 /** Which model produced an item ("mock" when mocked), for its attribution caption. */
@@ -146,7 +148,7 @@ export interface ProgressDTO {
   project: { id: string; name: string; timezone: string };
   criteria: string[];
   trends: { sessionId: string; label: string; startedAt: string | null; score: number | null; criteria: Record<string, number> }[];
-  history: { sessionId: string | null; createdAt: string; resolved: CoachItemDTO[]; open: CoachItemDTO[]; newIssues: CoachItemDTO[] }[];
+  history: { sessionId: string | null; createdAt: string; resolved: CoachItemDTO[]; open: CoachItemDTO[]; newIssues: CoachItemDTO[]; notRetested: CoachItemDTO[] }[];
   nextPlan: string[];
   /** The model that wrote the latest plan. */
   nextPlanModel: ModelRefDTO | null;

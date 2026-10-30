@@ -1,11 +1,12 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
-import { FolderGit2, GitBranch } from "lucide-react";
-import { useState } from "react";
+import { FolderGit2, GitBranch, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useJob, useLatestJob } from "@/hooks/use-job";
 import { api } from "@/lib/api-client";
 import type { RepoDTO } from "@/lib/types";
 import { ErrorAlert } from "./error-alert";
@@ -20,7 +21,7 @@ const KIND_LABEL: Record<string, string> = {
   secret: "Committed secrets",
 };
 
-export function RepoSummary({ repo }: { repo: RepoDTO }) {
+export function RepoSummary({ repo, onRetry }: { repo: RepoDTO; onRetry?: () => void }) {
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -43,6 +44,17 @@ export function RepoSummary({ repo }: { repo: RepoDTO }) {
           </div>
         ))}
       </dl>
+      {repo.capabilitiesError ? (
+        <div role="alert" className="text-status-unverified-foreground flex flex-wrap items-start gap-2 rounded-lg border p-3 text-sm">
+          <TriangleAlert size={16} className="mt-0.5 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1 break-words">Capabilities unavailable: {repo.capabilitiesError} Dependencies, tests, TODOs and secrets were still scanned.</span>
+          {onRetry ? (
+            <Button size="sm" variant="outline" onClick={onRetry}>
+              Retry
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {repo.topFindings.filter((f) => f.severity === "high" || f.severity === "medium").length > 0 ? (
         <ul className="grid gap-1">
           {repo.topFindings
@@ -69,26 +81,42 @@ export function RepoPanel({ projectId, repo, onDone }: { projectId: string; repo
   const [ref, setRef] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [starting, setStarting] = useState(false);
+  // While the picker is open (or closing), the next click would be swallowed; the button waits for the selection.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const picker = useQuery({ queryKey: ["github-repos"], queryFn: () => api<{ signedIn: boolean; repos: { fullName: string; private: boolean }[] }>("/api/github/repos"), staleTime: 60_000 });
+  // A digest started before a reload (or whose start request failed after queuing) is picked back up.
+  const latest = useLatestJob(projectId, "repo-digest", jobId === null);
+  useEffect(() => {
+    const job = latest.data?.job;
+    if (jobId === null && job && job.state !== "completed") setJobId(job.id);
+  }, [latest.data, jobId]);
 
   const submit = async () => {
+    if (starting) return;
     setError(null);
+    setStarting(true);
     try {
       const { jobId: id } = await api<{ jobId: string }>(`/api/projects/${projectId}/repo`, { method: "POST", json: { githubFullName: fullName.trim(), ...(ref.trim() ? { ref: ref.trim() } : {}) } });
       setJobId(id);
     } catch (e) {
       setError(e);
+      void latest.refetch();
+    } finally {
+      setStarting(false);
     }
   };
+  const status = useJob(jobId);
+  const running = jobId !== null && status.data?.state !== "completed" && status.data?.state !== "failed" && !status.error;
 
   return (
     <div className="grid gap-4">
-      {repo ? <RepoSummary repo={repo} /> : null}
+      {repo ? <RepoSummary repo={repo} onRetry={submit} /> : null}
       <div className="grid gap-3 md:grid-cols-[1fr_12rem_auto] md:items-end">
         <div className="grid gap-2">
           <Label htmlFor="repo-name">Repository</Label>
           {picker.data?.signedIn && picker.data.repos.length > 0 ? (
-            <Select value={fullName} onValueChange={setFullName}>
+            <Select value={fullName} onValueChange={setFullName} onOpenChange={(open) => setPickerOpen(open)}>
               <SelectTrigger id="repo-name" className="w-full">
                 <SelectValue placeholder="Choose a repo" />
               </SelectTrigger>
@@ -109,13 +137,24 @@ export function RepoPanel({ projectId, repo, onDone }: { projectId: string; repo
           <Label htmlFor="repo-ref">Branch or commit</Label>
           <Input id="repo-ref" className="font-mono" placeholder="Default branch" value={ref} onChange={(e) => setRef(e.target.value)} />
         </div>
-        <Button onClick={submit} disabled={!/^[\w.-]+\/[\w.-]+$/.test(fullName.trim())}>
-          <GitBranch /> {repo ? "Re-read repo" : "Read repo"}
+        <Button onClick={submit} disabled={pickerOpen || starting || running || !/^[\w.-]+\/[\w.-]+$/.test(fullName.trim())}>
+          <GitBranch /> {starting ? "Starting" : repo ? "Re-read repo" : "Read repo"}
         </Button>
       </div>
       <p className="text-muted-foreground text-xs">Read-only. Stage Ready never writes to your repo. {picker.data?.signedIn ? "" : "Without GitHub sign-in, only public repos can be read."}</p>
       {error ? <ErrorAlert title="Could not start the repo digest" error={error} onRetry={submit} /> : null}
-      {jobId ? <JobProgress key={jobId} jobId={jobId} title="Repo digest" onRetry={submit} onDone={onDone} /> : null}
+      {jobId ? (
+        <JobProgress
+          key={jobId}
+          jobId={jobId}
+          title="Repo digest"
+          onRetry={submit}
+          onDone={() => {
+            void latest.refetch();
+            onDone();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

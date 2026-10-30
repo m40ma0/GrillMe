@@ -1,6 +1,7 @@
 pnpm-lock.yaml
 packages/db/drizzle
 .next
+.next-guest
 node_modules
 apps/web/src/components/ui
 apps/web/test-results

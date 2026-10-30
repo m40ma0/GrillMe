@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { promisedLatencyMs, prompts, type Ai } from "@stage-ready/ai";
-import type { Db } from "@stage-ready/db";
+import { sessions as sessionsTable, type Db } from "@stage-ready/db";
+import { eq } from "drizzle-orm";
 import {
   PERSONA_ROLE_LABEL,
   TALK_OVER_YIELD_MS,
@@ -128,6 +129,7 @@ export class LiveSession {
   private sectionStartedMs = 0;
   private overTimeAsked = new Set<string>();
   private modelCalls = 0;
+  private mockedCalls = 0;
   private modelCost: number | null = 0;
   private latestRegions: { atMs: number; labels: string[] }[] = [];
   private difficulty: number;
@@ -180,8 +182,9 @@ export class LiveSession {
     });
   }
 
-  private track<T>(result: { costUsd: number | null; value: T }): T {
+  private track<T>(result: { costUsd: number | null; value: T; modelId: string }): T {
     this.modelCalls++;
+    if (result.modelId === "mock") this.mockedCalls++;
     this.modelCost = this.modelCost === null || result.costUsd === null ? null : this.modelCost + result.costUsd;
     return result.value;
   }
@@ -218,6 +221,11 @@ export class LiveSession {
     }
     await this.deps.tracker.probe();
     this.startedAt = new Date();
+    // Recorded now, so a running rehearsal is never mistaken for one that never started (those are pruned).
+    const startedAt = this.startedAt;
+    void Promise.resolve()
+      .then(() => this.deps.db.update(sessionsTable).set({ startedAt }).where(eq(sessionsTable.id, this.ctx.sessionId)))
+      .catch((error: unknown) => this.deps.logger.warn({ err: error }, "could not record the session start"));
     this.lastClientMs = 0;
     this.lastWallMs = Date.now();
     this.state = this.ctx.mode === "qa_only" ? "qa" : "live";
@@ -284,6 +292,7 @@ export class LiveSession {
       latency: steps.map((stepKey) => ({ stepKey, ...latencySummary(this.latency.filter((l) => l.stepKey === stepKey).map((l) => l.durationMs)) })),
       modelCostUsd: this.modelCost === null ? null : Math.round(this.modelCost * 10_000) / 10_000,
       modelCalls: this.modelCalls,
+      mockedCalls: this.mockedCalls,
       stt: this.stt?.name ?? "none",
       flags: this.flags,
     };

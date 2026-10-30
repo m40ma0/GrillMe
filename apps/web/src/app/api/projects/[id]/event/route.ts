@@ -49,7 +49,9 @@ export const PATCH = route<{ id: string }>(async (req, { user, params }) => {
     await tx.insert(criteria).values(
       input.criteria.map((c, order) => {
         const prior = before.find((b) => b.id === c.id);
+        // Existing criteria keep their id, so the editor still matches each one to its source quote after saving.
         return {
+          ...(prior ? { id: prior.id } : {}),
           projectId: project.id,
           eventSpecId: existing.id,
           order,

@@ -32,6 +32,8 @@ export interface SessionSummary {
   latency: { stepKey: string; n: number; p50: number | null; p95: number | null }[];
   modelCostUsd: number | null;
   modelCalls: number;
+  /** Calls answered by the mock (Demo Mode without live models, or past the demo allowance). */
+  mockedCalls?: number;
   stt: string;
   flags?: AuditFlag[];
 }
@@ -63,4 +65,17 @@ export function toCoachItems(items: unknown): CoachItem[] {
     const parsed = CoachItem.safeParse(item);
     return parsed.success ? [parsed.data] : [];
   });
+}
+
+/**
+ * How a session's model use reads: "Mocked" when no real model was called, the cost when MODEL_PRICES
+ * covers it, otherwise just the call count (an unknown cost is not shown as $0).
+ */
+export function modelUseLabel(s: { modelCostUsd: number | null; modelCalls: number; mockedCalls?: number | undefined }): string {
+  const calls = `${s.modelCalls} model call${s.modelCalls === 1 ? "" : "s"}`;
+  const mocked = s.mockedCalls ?? (s.modelCostUsd === 0 ? s.modelCalls : 0);
+  if (s.modelCalls === 0) return "no model calls";
+  if (mocked >= s.modelCalls) return `${calls}, mocked`;
+  if (s.modelCostUsd === null || s.modelCostUsd === 0) return mocked > 0 ? `${calls} (${mocked} mocked)` : calls;
+  return `$${s.modelCostUsd.toFixed(4)} over ${calls}${mocked > 0 ? ` (${mocked} mocked)` : ""}`;
 }

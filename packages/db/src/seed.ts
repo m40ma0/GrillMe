@@ -245,7 +245,10 @@ export async function seedDemoProject(db: Db, ownerId: string): Promise<string> 
       sessionId: session.id,
       resolved: [{ key: "criterion:problem-statement", text: "Problem statement now names the responder", severity: "medium" }],
       open: [{ key: "claim:the summary is instant", text: 'Fix the contradicted claim "The summary is instant": it took 9.2 s.', severity: "high" }],
-      newIssues: [{ key: "pace:hook", text: "The hook runs long before the first demo moment", severity: "medium" }],
+      newIssues: [
+        { key: "criterion:real world impact", text: "Cover Real-world impact: the judges heard almost nothing about it.", severity: "medium" },
+        { key: "pace:hook", text: "The hook runs long before the first demo moment", severity: "medium" },
+      ],
       nextPlan: ["Show the offline flow or cut the line", "Add classifier evaluation evidence", "Drill the impact question"],
     });
 

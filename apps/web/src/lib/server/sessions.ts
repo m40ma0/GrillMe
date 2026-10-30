@@ -1,11 +1,21 @@
 import "server-only";
 import { claims, coachNotes, criteria, eventSpecs, evidence, judgeTurns, latencySamples, personas, sectionPlans, sessions, transcriptSegments } from "@stage-ready/db";
 import { PERSONA_ROLE_LABEL, latencySummary, toCoachItems, type SessionSummary } from "@stage-ready/shared";
-import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, ne } from "drizzle-orm";
 import type { SessionReviewDTO, ProgressDTO } from "@/lib/types";
 import { notFound, uuidParam } from "./api";
 import { db } from "./db";
 import { requireProject } from "./projects";
+
+/** A rehearsal that never started (blocked capture, closed tab) is removed after this long. */
+export const ORPHAN_SESSION_MS = 5 * 60_000;
+
+/** Deletes the project's rehearsal sessions that never started (no audio, so no start time). */
+export async function pruneOrphanSessions(projectId: string, now = Date.now()) {
+  await db()
+    .delete(sessions)
+    .where(and(eq(sessions.projectId, projectId), ne(sessions.mode, "demoguard"), isNull(sessions.startedAt), lt(sessions.createdAt, new Date(now - ORPHAN_SESSION_MS))));
+}
 
 export async function loadSessionReview(userId: string, sessionId: string): Promise<SessionReviewDTO> {
   uuidParam(sessionId, "Session");
@@ -87,6 +97,7 @@ export async function loadSessionReview(userId: string, sessionId: string): Prom
           resolved: toCoachItems(note.resolved),
           open: toCoachItems(note.open),
           newIssues: toCoachItems(note.newIssues),
+          notRetested: toCoachItems(note.notRetested),
           nextPlan: note.nextPlan,
           model: note.modelId ? { modelId: note.modelId, latencyMs: note.modelLatencyMs } : null,
         }
@@ -123,7 +134,14 @@ export async function loadProgress(userId: string, projectId: string): Promise<P
         ),
       };
     }),
-    history: notes.map((n) => ({ sessionId: n.sessionId, createdAt: n.createdAt.toISOString(), resolved: toCoachItems(n.resolved), open: toCoachItems(n.open), newIssues: toCoachItems(n.newIssues) })),
+    history: notes.map((n) => ({
+      sessionId: n.sessionId,
+      createdAt: n.createdAt.toISOString(),
+      resolved: toCoachItems(n.resolved),
+      open: toCoachItems(n.open),
+      newIssues: toCoachItems(n.newIssues),
+      notRetested: toCoachItems(n.notRetested),
+    })),
     nextPlan: latest?.nextPlan ?? [],
     nextPlanModel: latest?.modelId ? { modelId: latest.modelId, latencyMs: latest.modelLatencyMs } : null,
   };

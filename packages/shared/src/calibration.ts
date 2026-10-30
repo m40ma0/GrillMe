@@ -117,6 +117,8 @@ export const RepoDigest = z.object({
   dependencies: z.array(RepoDependency),
   findings: z.array(RepoFinding),
   readme: z.string().nullable(),
+  /** Why the model pass found no capabilities (every batch failed); the deterministic scan is still saved. */
+  capabilitiesError: z.string().nullable().optional(),
 });
 export type RepoDigest = z.infer<typeof RepoDigest>;
 

@@ -18,7 +18,7 @@ export function ProgressView({ data }: { data: ProgressDTO }) {
   const rows = data.trends.map((t) => ({ label: t.label, ...Object.fromEntries(keyed.map((c) => [c.key, t.criteria[c.name] ?? 0])) }));
   const resolved = data.history.flatMap((h) => h.resolved.map((r) => ({ ...r, when: h.createdAt })));
   const latest = data.history[0];
-  const open = latest ? [...latest.open, ...latest.newIssues] : [];
+  const open = latest ? [...latest.open, ...latest.newIssues, ...latest.notRetested] : [];
   const fmt = (iso: string) => new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: data.project.timezone }).format(new Date(iso));
 
   if (data.trends.length === 0) {

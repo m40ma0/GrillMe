@@ -7,23 +7,41 @@ export interface Capture {
   stop(): Blob | null;
 }
 
+export interface Media {
+  video: MediaStream;
+  mic: MediaStream;
+}
+
+/** Asks for the screen (or camera) and the mic. Done before a session exists, so a refusal leaves nothing behind. */
+export async function acquireMedia(source: VideoSource): Promise<Media> {
+  const video =
+    source === "screen"
+      ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false })
+      : await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+  try {
+    const mic = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    return { video, mic };
+  } catch (error) {
+    video.getTracks().forEach((t) => t.stop());
+    throw error;
+  }
+}
+
+export const releaseMedia = (media: Media | null) => [media?.video, media?.mic].forEach((s) => s?.getTracks().forEach((t) => t.stop()));
+
 /**
  * Screen (or camera/virtual camera) plus mic. Audio goes out as 250 ms PCM16 chunks; frames at 2 fps,
  * skipped when their perceptual hash is unchanged. Everything is recorded locally with MediaRecorder.
  */
 export async function startCapture(opts: {
-  source: VideoSource;
+  media: Media;
   t0: number;
   onAudio: (chunk: Uint8Array) => void;
   onFrame: (frame: Uint8Array) => void;
   onLevel: (level: number) => void;
   fps?: number;
 }): Promise<Capture> {
-  const video =
-    opts.source === "screen"
-      ? await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false })
-      : await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
-  const mic = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  const { video, mic } = opts.media;
 
   const audio = new AudioContext();
   await audio.audioWorklet.addModule("/worklets/pcm16.js");

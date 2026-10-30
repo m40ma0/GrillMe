@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { createAi, createDemoAi, MetaModelAdapter, type Ai } from "@stage-ready/ai";
+import { AiError, createAi, createDemoAi, MetaModelAdapter, type Ai } from "@stage-ready/ai";
 import { WorkerEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
 import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb, projects } from "@stage-ready/db";
@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import IORedis from "ioredis";
 import pino from "pino";
 import { eventIngest } from "./jobs/event-ingest";
-import { repoDigest } from "./jobs/repo-digest";
+import { describeModelError, repoDigest } from "./jobs/repo-digest";
 import { questionBank, renderSlides } from "./jobs/qa-kit";
 import { sessionReview } from "./jobs/session-review";
 import { render, takeProcess } from "./jobs/takes";
@@ -81,9 +81,10 @@ const worker = new Worker(
           return await renderSlides(payload, ctx);
       }
     } catch (error) {
-      ctx.logger.error({ err: error }, "job failed");
+      ctx.logger.error({ err: error, detail: error instanceof AiError ? error.detail : undefined }, "job failed");
       if (error instanceof UserFacingError) throw error;
-      throw new Error(`${payload.name} failed: ${(error as Error).message}`);
+      // Model errors carry the API's own explanation, so the job's failure reason says what went wrong.
+      throw new Error(`${payload.name} failed: ${describeModelError(error)}`);
     }
   },
   { connection, concurrency: 4 },

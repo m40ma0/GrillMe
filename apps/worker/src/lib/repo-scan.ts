@@ -115,7 +115,7 @@ export function scanRepo(files: RepoFile[], options: { chunkBudgetChars?: number
   const readme = files.find((f) => /^(?:[^/]+\/)?readme(\.md|\.rst|\.txt)?$/i.test(f.path.split("/").slice(-1)[0] ?? "") && f.path.split("/").length <= 2)?.content ?? null;
 
   // Chunks for the capability pass: source files first, entry points and larger files ahead.
-  const budget = options.chunkBudgetChars ?? 80_000;
+  const budget = options.chunkBudgetChars ?? 400_000;
   const ranked = files
     .filter((f) => SOURCE_EXT.test(f.path) && !TEST_FILE.test(f.path))
     .sort((a, b) => Number(/(index|main|app|server|api|route)\.\w+$/.test(b.path)) - Number(/(index|main|app|server|api|route)\.\w+$/.test(a.path)) || b.content.length - a.content.length);

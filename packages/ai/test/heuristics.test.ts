@@ -60,11 +60,21 @@ describe("coach notes diff", async () => {
       { key: "b", text: "B again", severity: "medium" as const },
       { key: "c", text: "C", severity: "high" as const },
     ];
-    const diff = diffWeakSpots(prev, now);
+    const diff = diffWeakSpots(prev, now, new Set(["a"]));
     expect(diff.resolved.map((i) => i.key)).toEqual(["a"]);
     expect(diff.open.map((i) => i.key)).toEqual(["b"]);
     expect(diff.newIssues.map((i) => i.key)).toEqual(["c"]);
+    expect(diff.notRetested).toEqual([]);
     expect(heuristicPlan(diff, ["Originality"])).toEqual(["C", "B again", "Drill a question on Originality."]);
     expect(heuristicPlan(diffWeakSpots([], []), [])).toHaveLength(3);
+  });
+
+  it("does not count an item that simply did not come up again as resolved", () => {
+    const prev = [{ key: "claim:the summary is instant", text: "Fix the contradicted claim", severity: "high" as const }];
+    const diff = diffWeakSpots(prev, []);
+    expect(diff.resolved).toEqual([]);
+    expect(diff.notRetested.map((i) => i.key)).toEqual(["claim:the summary is instant"]);
+    // Not re-tested items stay in the plan.
+    expect(heuristicPlan(diff, [])[0]).toBe("Fix the contradicted claim");
   });
 });

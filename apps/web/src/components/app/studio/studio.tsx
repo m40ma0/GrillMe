@@ -13,7 +13,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api-client";
-import { startCapture, type Capture, type VideoSource } from "@/lib/studio/capture";
+import { acquireMedia, releaseMedia, startCapture, type Capture, type Media, type VideoSource } from "@/lib/studio/capture";
 import { downloadBlob } from "@/lib/studio/download";
 import { StudioSocket } from "@/lib/studio/socket";
 import { speakJudge } from "@/lib/studio/tts";
@@ -99,7 +99,10 @@ export function Studio(props: StudioProps) {
     setRecording(null);
     useStudio.getState().reset();
     useStudio.getState().set({ phase: "connecting" });
+    let media: Media | null = null;
     try {
+      // Capture first: if the browser blocks the screen or mic, no session row is created.
+      media = await acquireMedia(source);
       const session = await api<CreateSessionResponse>(`/api/projects/${props.projectId}/sessions`, {
         method: "POST",
         json: { mode, difficulty, consent: true, ...(mode === "section_drill" ? { drillSection: drill } : {}) },
@@ -112,7 +115,7 @@ export function Studio(props: StudioProps) {
       socket.current = ws;
       t0.current = performance.now();
       const cap = await startCapture({
-        source,
+        media,
         t0: t0.current,
         onAudio: (chunk) => ws.binary(chunk),
         onFrame: (frame) => ws.binary(frame),
@@ -125,6 +128,7 @@ export function Studio(props: StudioProps) {
       useStudio.getState().set({ sessionId: session.sessionId });
     } catch (error) {
       capture.current?.stop();
+      releaseMedia(media);
       socket.current?.close();
       setStream(null);
       useStudio.getState().set({ phase: "idle" });

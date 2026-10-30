@@ -115,6 +115,7 @@ export async function loadRepo(projectId: string): Promise<RepoDTO | null> {
     fileCount: repo.fileCount,
     digestTokens: repo.digestTokens,
     findingCounts: Object.fromEntries(counts.map((c) => [c.kind, c.n])),
+    capabilitiesError: repo.capabilitiesError,
     topFindings: top.sort((a, b) => rank[a.severity] - rank[b.severity]).map((f) => ({ id: f.id, kind: f.kind, filePath: f.filePath, line: f.line, summary: f.summary, severity: f.severity })),
   };
 }
@@ -188,6 +189,7 @@ export async function loadOverviewExtras(projectId: string) {
           resolved: toCoachItems(note.resolved).map((i) => i.text),
           open: toCoachItems(note.open).map((i) => i.text),
           newIssues: toCoachItems(note.newIssues).map((i) => i.text),
+          notRetested: toCoachItems(note.notRetested).map((i) => i.text),
           nextPlan: note.nextPlan,
           model: note.modelId ? { modelId: note.modelId, latencyMs: note.modelLatencyMs } : null,
         }

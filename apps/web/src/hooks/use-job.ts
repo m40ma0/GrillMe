@@ -12,3 +12,16 @@ export function useJob(jobId: string | null) {
     refetchInterval: (query) => (query.state.data && ["completed", "failed"].includes(query.state.data.state) ? false : 1_500),
   });
 }
+
+/**
+ * The project's latest job of one kind (running, queued, or finished in the last hour), so a panel can
+ * pick its progress back up after a reload or a failed start request.
+ */
+export function useLatestJob(projectId: string, name: string, enabled = true) {
+  return useQuery({
+    queryKey: ["latest-job", projectId, name],
+    queryFn: () => api<{ job: { id: string; state: string } | null }>(`/api/projects/${projectId}/jobs/latest?name=${encodeURIComponent(name)}`),
+    enabled,
+    staleTime: 0,
+  });
+}

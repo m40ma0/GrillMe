@@ -144,6 +144,8 @@ export const repos = pgTable("repos", {
   fileCount: integer(),
   dependencies: jsonb().$type<RepoDigest["dependencies"]>().notNull().default([]),
   readme: text(),
+  /** Set when the capability pass failed; the deterministic findings are still stored. */
+  capabilitiesError: text(),
   ...timestamps,
 });
 
@@ -502,6 +504,8 @@ export const coachNotes = pgTable(
     resolved: jsonb().$type<CoachItem[]>().notNull().default([]),
     open: jsonb().$type<CoachItem[]>().notNull().default([]),
     newIssues: jsonb().$type<CoachItem[]>().notNull().default([]),
+    /** Earlier items this session did not re-check: still open, not resolved. */
+    notRetested: jsonb().$type<CoachItem[]>().notNull().default([]),
     nextPlan: jsonb().$type<string[]>().notNull().default([]),
     embedding: vector({ dimensions: EMBED_DIM }),
     /** The model behind it ("mock" when mocked) and its latency, for the attribution caption. */

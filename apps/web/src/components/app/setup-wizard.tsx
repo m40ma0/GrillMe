@@ -146,6 +146,29 @@ function PitchStep({ bundle, onDone }: { bundle: ProjectBundle; onDone: () => vo
   );
 }
 
+/** Shaped like the wizard (progress, tabs, one step card), so loading never shows a blank block. */
+function WizardSkeleton({ step }: { step: number }) {
+  return (
+    <div className="grid gap-6" aria-busy="true" aria-label="Loading setup">
+      <div className="grid gap-2">
+        <div className="flex justify-between text-sm">
+          <span className="font-medium">
+            Step {Math.min(5, Math.max(1, step + 1))} of 5 · {STEPS[Math.min(4, Math.max(0, step))]}
+          </span>
+        </div>
+        <Progress value={Math.max(0, step) * 20} aria-label="Setup progress" />
+      </div>
+      <Skeleton className="h-9 w-full rounded-lg" />
+      <div className="grid gap-4 rounded-xl border p-6">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-4 w-72" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-9 w-32" />
+      </div>
+    </div>
+  );
+}
+
 export function SetupWizard() {
   const router = useRouter();
   const params = useSearchParams();
@@ -160,18 +183,21 @@ export function SetupWizard() {
     if (bundle.data?.project.timezone && !isTimeZone(bundle.data.project.timezone)) toast.error("This project's time zone is not valid.");
   }, [bundle.data]);
 
+  // Step changes are optimistic: the URL changes through the history API (no server round trip; Next keeps
+  // useSearchParams in sync), the cached project moves forward at once, and the server is told in the background.
   const go = (id: string, next: number) => {
+    queryClient.setQueryData<ProjectBundle>(["project", id], (old) => (old ? { ...old, project: { ...old.project, setupStep: Math.max(old.project.setupStep, next) } } : old));
     void queryClient.invalidateQueries({ queryKey: ["project", id] });
-    router.replace(`/projects/new?project=${id}&step=${next}`);
+    window.history.replaceState(null, "", `/projects/new?project=${id}&step=${next}`);
   };
   const advance = async (next: number) => {
     if (!projectId) return;
-    await api(`/api/projects/${projectId}`, { method: "PATCH", json: { setupStep: next } }).catch(() => undefined);
     go(projectId, next);
+    void api(`/api/projects/${projectId}`, { method: "PATCH", json: { setupStep: next } }).catch(() => undefined);
   };
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["project", projectId] });
 
-  if (projectId && bundle.isPending) return <Skeleton className="h-96 rounded-xl" />;
+  if (projectId && bundle.isPending) return <WizardSkeleton step={Number.isInteger(requested) ? requested : 0} />;
   if (projectId && bundle.error) return <ErrorAlert title="Could not load this project" error={bundle.error} onRetry={() => void bundle.refetch()} />;
   const data = bundle.data ?? null;
 
@@ -217,6 +243,8 @@ export function SetupWizard() {
                 </CardHeader>
                 <CardContent>
                   <SourcesForm
+                    projectId={data.project.id}
+                    jobName="event-ingest"
                     endpoint={`/api/projects/${data.project.id}/event/ingest`}
                     urlLabel="Event page URLs"
                     textLabel="Or paste the event text"
@@ -254,6 +282,8 @@ export function SetupWizard() {
                 </CardHeader>
                 <CardContent className="grid gap-6">
                   <SourcesForm
+                    projectId={data.project.id}
+                    jobName="winners"
                     endpoint={`/api/projects/${data.project.id}/winners`}
                     urlLabel="Winner or results page URLs"
                     textLabel="Or paste the winner text"
