@@ -7,7 +7,7 @@ Stage Ready runs as three Node processes, a Python service on Modal, and four ma
 | `apps/web`                | Next.js 15 (UI and REST API), port 3000                  | Vercel, or any Node host                            |
 | `apps/realtime`           | Fastify WebSocket server, port 4000                      | Any Node host with WebSockets                       |
 | `apps/worker`             | BullMQ job worker, health on 4100                        | Any Node host (no public port needed)               |
-| `services/vision`         | FastAPI: faster-whisper, FFmpeg renders, take thumbnails | Modal (`services/vision/modal_app.py`, L4 GPU)      |
+| `services/vision`         | FastAPI: faster-whisper, FFmpeg renders, take thumbnails | Modal (`services/vision/modal_app.py`, CPU or GPU)  |
 | Postgres 16 with pgvector | Everything stored                                        | Neon, Supabase, RDS (enable the `vector` extension) |
 | Redis 7                   | Job queue and realtime state                             | Upstash (TCP, not REST), Redis Cloud, ElastiCache   |
 | S3-compatible storage     | Recordings, takes, slides, renders                       | Cloudflare R2 or S3                                 |
@@ -42,6 +42,8 @@ Run it from the service's folder, so Modal finds `requirements.txt` and the `app
 ```bash
 cd services/vision && modal deploy modal_app.py
 ```
+
+It runs on CPU by default (works on Modal's free plan; speech to text uses faster-whisper `base.en`). With a payment method on Modal, `MODAL_GPU=L4 modal deploy modal_app.py` runs it on a GPU with the more accurate `small.en`.
 
 Put the printed URL in `VISION_SERVICE_URL` and the same token in `VISION_SERVICE_TOKEN`. Modal may run several containers: renders mirror their status to storage, so a status poll that reaches another container still gets an answer (see `docs/decisions/0006-m6-decisions.md`).
 
