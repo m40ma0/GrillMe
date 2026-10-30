@@ -29,9 +29,20 @@ const ModelEnv = z.object({
   MODEL_PRICES: z.preprocess(empty, z.string().optional()),
   META_API_BASE_URL: optionalUrl,
   META_API_KEY: optionalString,
+  /** Same key under the name the Meta provider config uses; META_API_KEY wins when both are set. */
+  MODEL_API_KEY: optionalString,
+  /** "responses" (POST /responses, the Meta Model API's interface) or "chat_completions" (POST /chat/completions). */
+  META_API_STYLE: z.preprocess(empty, z.enum(["responses", "chat_completions"]).default("responses")),
+  /** Reasoning settings for the Responses API. */
+  META_REASONING_EFFORT: z.preprocess(empty, z.enum(["none", "minimal", "low", "medium", "high"]).default("high")),
+  META_REASONING_SUMMARY: z.preprocess(empty, z.enum(["auto", "concise", "detailed", "none"]).default("auto")),
+  /** Ask for encrypted reasoning so a retry can continue from it without server-side storage. */
+  META_REASONING_ENCRYPTED: z.preprocess(empty, bool.default(true)),
   MODEL_SPARK: optionalString,
   MODEL_WONDER: optionalString,
   MODEL_IMAGE: optionalString,
+  /** SAM 3.1 hosted on the Meta Model API, for UI tracking without a local checkpoint. */
+  MODEL_SAM: optionalString,
   MODEL_STT: optionalString,
   MODEL_TTS: optionalString,
   EMBED_MODEL: optionalString,

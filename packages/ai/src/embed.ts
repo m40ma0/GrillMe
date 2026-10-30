@@ -1,5 +1,5 @@
 import type { ModelConfig } from "@stage-ready/config";
-import { AiError } from "./types";
+import { AiError, metaApiKey } from "./types";
 
 export interface Embedder {
   readonly modelId: string;
@@ -13,10 +13,10 @@ export interface Embedder {
  * is then retrieved by recency instead of relevance.
  */
 export function createEmbedder(config: ModelConfig): Embedder | null {
-  if (config.MODEL_MOCK || !config.META_API_KEY || !config.META_API_BASE_URL || !config.EMBED_MODEL) return null;
+  if (config.MODEL_MOCK || !metaApiKey(config) || !config.META_API_BASE_URL || !config.EMBED_MODEL) return null;
   const dimensions = config.EMBED_DIM ?? 1024;
   const base = config.META_API_BASE_URL.replace(/\/+$/, "");
-  const key = config.META_API_KEY;
+  const key = metaApiKey(config);
   const model = config.EMBED_MODEL;
   return {
     modelId: model,
