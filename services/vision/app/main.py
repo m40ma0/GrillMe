@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from .config import settings
 from .phash import dhash_jpeg
-from .render import Renderer, RenderRequest, fetch
+from .render import Renderer, RenderRequest, fetch, put, take_thumbnail
 from .sam_tracker import LABELS, SamTracker
 from .stt import Model, Segmenter, load_model, run_job, transcribe_file
 
@@ -115,6 +115,27 @@ async def transcribe_upload(request: Request, authorization: str | None = Header
         return await asyncio.to_thread(transcribe_file, model, str(path))
 
 
+class ThumbnailRequest(BaseModel):
+    source: str
+    atMs: int = 2000
+    #: Presigned PUT for the JPEG.
+    output: str
+
+
+@app.post("/thumbnail")
+async def thumbnail(body: ThumbnailRequest, authorization: str | None = Header(default=None)) -> dict[str, bool]:
+    """Grabs one frame of an uploaded take for the Director's take grid."""
+    check_token(authorization)
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "thumbnail.jpg"
+        try:
+            await asyncio.to_thread(take_thumbnail, body.source, max(0, body.atMs), path)
+            await asyncio.to_thread(put, body.output, path, "image/jpeg")
+        except (ValueError, RuntimeError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+    return {"ok": True}
+
+
 @app.post("/render", status_code=202)
 def start_render(body: RenderRequest, authorization: str | None = Header(default=None)) -> dict[str, object]:
     check_token(authorization)
@@ -126,7 +147,7 @@ def render_status(job_id: str, authorization: str | None = Header(default=None))
     check_token(authorization)
     job = renderer.jobs.get(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="Unknown render job. Render jobs live in one service instance; retry the render.")
+        raise HTTPException(status_code=404, detail="Unknown render job on this instance. Callers that passed outputs.status read the mirrored status from storage.")
     return job.public()
 
 

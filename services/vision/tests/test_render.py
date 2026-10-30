@@ -83,3 +83,54 @@ def test_card_uses_generated_artwork_and_falls_back_without_it(tmp_path):
         corner_art, corner_plain = a.getpixel((5, 5)), p.getpixel((5, 5))
         assert corner_art != corner_plain  # the artwork shows through
         assert b.getpixel((5, 5)) == corner_plain  # unreadable artwork falls back to the plain card
+
+
+def test_status_mirror_writes_the_public_status_and_throttles(monkeypatch):
+    from app import render as render_module
+
+    sent: list[dict] = []
+
+    class Ok:
+        def raise_for_status(self) -> None:
+            pass
+
+    def fake_put(url, data, headers, timeout):
+        assert url == "https://storage.test/status.json" and headers["content-type"] == "application/json"
+        sent.append(__import__("json").loads(data))
+        return Ok()
+
+    monkeypatch.setattr(render_module.requests, "put", fake_put)
+    job = render_module.RenderJob(id="job1")
+    mirror = render_module.StatusMirror("https://storage.test/status.json", job)
+    mirror.write(force=True)
+    job.progress = 0.5
+    mirror.write()  # within a second of the last write: skipped
+    job.status = "done"
+    mirror.write(force=True)
+    assert [s["status"] for s in sent] == ["queued", "done"]
+    assert sent[0]["id"] == "job1"
+    render_module.StatusMirror(None, job).write(force=True)  # no URL: nothing sent
+    assert len(sent) == 2
+
+
+def test_take_thumbnail_reads_one_frame_over_http(tmp_path):
+    import functools
+    import http.server
+    import threading
+
+    from PIL import Image
+
+    from app.render import synth_demo, take_thumbnail
+
+    synth_demo(tmp_path / "take.mkv", "Hook", 3000)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(tmp_path))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        out = tmp_path / "thumb.jpg"
+        take_thumbnail(f"http://127.0.0.1:{server.server_port}/take.mkv", 1000, out)
+        assert Image.open(out).size == (640, 360)
+        with pytest.raises(ValueError):
+            take_thumbnail("file:///etc/passwd", 0, tmp_path / "x.jpg")
+    finally:
+        server.shutdown()

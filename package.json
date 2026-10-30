@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "start": "turbo start --filter=@stage-ready/web --filter=@stage-ready/realtime --filter=@stage-ready/worker",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
     "test": "turbo test",

@@ -2,11 +2,25 @@
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": ["NODE_ENV"],
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": [".next/**", "!.next/cache/**", "dist/**"] },
-    "dev": { "cache": false, "persistent": true },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
+      "cache": false,
+      "persistent": true
+    },
     "lint": {},
     "typecheck": {},
-    "test": { "outputs": [] },
-    "test:e2e": { "cache": false }
+    "test": {
+      "outputs": []
+    },
+    "test:e2e": {
+      "cache": false
+    }
   }
 }

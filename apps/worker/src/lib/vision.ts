@@ -1,9 +1,10 @@
 import type { WorkerEnv } from "@stage-ready/config";
 import { z } from "zod";
 import { UserFacingError } from "./context";
+import type { Storage } from "./s3";
 
 const Transcript = z.object({ text: z.string(), words: z.array(z.object({ text: z.string(), startMs: z.number(), endMs: z.number() })), durationMs: z.number() });
-const RenderStatus = z.object({
+export const RenderStatus = z.object({
   id: z.string(),
   status: z.enum(["queued", "running", "done", "failed"]),
   progress: z.number(),
@@ -22,8 +23,12 @@ export interface RenderRequest {
   crossfadeMs: number;
   cardMs: number;
   preset: string;
-  outputs: { mp4: string; thumbnail: string };
+  /** Presigned PUTs; `status` receives the job's status JSON as it runs (see renderStatus). */
+  outputs: { mp4: string; thumbnail: string; status?: string };
 }
+
+/** A 404 from the vision service: on Modal, usually a poll that reached another container. */
+export class VisionNotFound extends UserFacingError {}
 
 /** Client for the vision and media service (services/vision). */
 export function visionClient(env: Pick<WorkerEnv, "VISION_SERVICE_URL" | "VISION_SERVICE_TOKEN">) {
@@ -42,7 +47,8 @@ export function visionClient(env: Pick<WorkerEnv, "VISION_SERVICE_URL" | "VISION
         (b: { detail?: unknown }) => String(b.detail ?? ""),
         () => "",
       );
-      throw new UserFacingError(`The vision service returned ${response.status}${detail ? `: ${detail}` : "."}`);
+      const ErrorType = response.status === 404 ? VisionNotFound : UserFacingError;
+      throw new ErrorType(`The vision service returned ${response.status}${detail ? `: ${detail}` : "."}`);
     }
     return schema.parse(await response.json());
   };
@@ -51,5 +57,21 @@ export function visionClient(env: Pick<WorkerEnv, "VISION_SERVICE_URL" | "VISION
     transcribe: (source: string) => call("/transcribe", Transcript, { method: "POST", body: JSON.stringify({ source }) }, 600_000),
     startRender: (req: RenderRequest) => call("/render", RenderStatus, { method: "POST", body: JSON.stringify(req) }),
     renderStatus: (id: string) => call(`/render/${id}`, RenderStatus),
+    thumbnail: (source: string, atMs: number, output: string) => call("/thumbnail", z.object({ ok: z.boolean() }), { method: "POST", body: JSON.stringify({ source, atMs, output }) }, 120_000),
   };
+}
+
+/**
+ * A render's status. Jobs live in one service instance's memory; when a poll lands on another
+ * instance (Modal scales out), the status the job mirrors to storage answers instead.
+ */
+export async function renderStatus(vision: Pick<ReturnType<typeof visionClient>, "renderStatus">, storage: Pick<Storage, "getJson">, id: string, statusKey: string): Promise<RenderStatus> {
+  try {
+    return await vision.renderStatus(id);
+  } catch (error) {
+    if (!(error instanceof VisionNotFound)) throw error;
+    const mirrored = RenderStatus.safeParse(await storage.getJson(statusKey));
+    if (!mirrored.success || mirrored.data.id !== id) throw new UserFacingError("The renderer lost track of this job (another instance answered and no status was written). Render again.");
+    return mirrored.data;
+  }
 }

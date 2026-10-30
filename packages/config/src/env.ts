@@ -74,6 +74,21 @@ const BaseEnv = z
   })
   .merge(ModelEnv);
 
+/** Values copied from .env.example that must never reach production. */
+const PLACEHOLDER = /^replace-with-/;
+
+function productionChecks(env: { NODE_ENV: string; AUTH_SECRET?: string; REALTIME_JWT_SECRET?: string; REALTIME_URL?: string; WEB_ORIGIN?: string }, ctx: z.RefinementCtx) {
+  if (env.NODE_ENV !== "production") return;
+  for (const key of ["AUTH_SECRET", "REALTIME_JWT_SECRET"] as const) {
+    if (env[key] !== undefined && PLACEHOLDER.test(env[key]))
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is still the .env.example placeholder. Generate one with: openssl rand -base64 32` });
+  }
+  if (env.REALTIME_URL?.startsWith("ws://"))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["REALTIME_URL"], message: "REALTIME_URL must use wss:// in production: browsers block ws:// from an https page." });
+  if (env.WEB_ORIGIN?.startsWith("http://localhost"))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["WEB_ORIGIN"], message: "Set WEB_ORIGIN to the deployed web app's origin, or the realtime server rejects every browser." });
+}
+
 export const WebEnv = BaseEnv.extend({
   AUTH_GITHUB_ID: optionalString,
   AUTH_GITHUB_SECRET: optionalString,
@@ -90,6 +105,7 @@ export const WebEnv = BaseEnv.extend({
   if (env.DEV_AUTH_BYPASS && env.NODE_ENV === "production") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["DEV_AUTH_BYPASS"], message: "DEV_AUTH_BYPASS must be false in production." });
   }
+  productionChecks(env, ctx);
 });
 export type WebEnv = z.infer<typeof WebEnv>;
 
@@ -116,7 +132,8 @@ export const RealtimeEnv = z
     VISION_SERVICE_TOKEN: optionalString,
     LOG_LEVEL: BaseEnv.shape.LOG_LEVEL,
   })
-  .merge(ModelEnv);
+  .merge(ModelEnv)
+  .superRefine(productionChecks);
 export type RealtimeEnv = z.infer<typeof RealtimeEnv>;
 
 export const DbEnv = z.object({ DATABASE_URL: z.string().url() });

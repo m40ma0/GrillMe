@@ -36,6 +36,7 @@ export async function loadTakes(projectId: string): Promise<TakeDTO[]> {
       transcript: take.transcript?.text ?? "",
       fixture: Boolean(take.mediaUrl?.startsWith("demo/")),
       hasMedia: Boolean(take.mediaUrl?.startsWith("s3://")),
+      hasThumbnail: Boolean(take.thumbnailUrl),
       score: score
         ? {
             total: score.total,

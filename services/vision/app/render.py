@@ -14,12 +14,14 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+import requests
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -66,6 +68,9 @@ class Outputs(Camel):
 
     mp4: str | None = None
     thumbnail: str | None = None
+    #: Presigned PUT for the job's status JSON. The job writes it as it runs, so a poll that lands on
+    #: another service instance (Modal scales out) can still be answered from storage by the caller.
+    status: str | None = None
 
 
 class RenderRequest(Camel):
@@ -244,6 +249,16 @@ def put(url: str, path: Path, content_type: str) -> None:
         pass
 
 
+
+def take_thumbnail(source: str, at_ms: int, dest: Path) -> None:
+    """One 640×360 JPEG frame of a take. Decodes from the start (browser WebM recordings have no seek index), so only the first seconds are read."""
+    if not source.startswith(("http://", "https://")):
+        raise ValueError(f"Unsupported take source {source!r}.")
+    scale = "scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2"
+    ffmpeg("-i", source, "-ss", f"{at_ms / 1000:.3f}", "-frames:v", "1", "-an", "-vf", scale, "-q:v", "4", str(dest))
+    if not dest.exists() or dest.stat().st_size == 0:
+        raise RuntimeError("FFmpeg wrote no frame; the take may be shorter than the requested time.")
+
 CUT_MS = 40  # a "cut" is a 40 ms dissolve so the audio never clicks
 
 
@@ -342,6 +357,8 @@ class Renderer:
         return job
 
     def _run(self, job: RenderJob, req: RenderRequest) -> None:
+        mirror = StatusMirror(req.outputs.status, job)
+        mirror.write(force=True)
         with self.slots:
             work = self.root / job.id
             work.mkdir(parents=True, exist_ok=True)
@@ -349,6 +366,7 @@ class Renderer:
 
             def report(pct: float, step: str) -> None:
                 job.progress, job.step = min(0.99, pct), step
+                mirror.write()
 
             try:
                 result = render(req, work, report)
@@ -366,3 +384,20 @@ class Renderer:
             except Exception as error:  # noqa: BLE001 - reported through the job
                 job.status, job.error = "failed", str(error)
                 shutil.rmtree(work, ignore_errors=True)
+            mirror.write(force=True)
+
+
+class StatusMirror:
+    """Writes a job's public status to a presigned PUT URL, at most once a second while running."""
+
+    def __init__(self, url: str | None, job: RenderJob) -> None:
+        self.url, self.job, self.last = url, job, 0.0
+
+    def write(self, force: bool = False) -> None:
+        if not self.url or (not force and time.monotonic() - self.last < 1.0):
+            return
+        self.last = time.monotonic()
+        try:
+            requests.put(self.url, data=json.dumps(self.job.public()).encode(), headers={"content-type": "application/json"}, timeout=10).raise_for_status()
+        except requests.RequestException:
+            pass  # Best effort: the in-memory status still answers polls that reach this instance.

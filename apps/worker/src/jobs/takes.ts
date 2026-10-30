@@ -3,7 +3,7 @@ import { criteria, edls, eventSpecs, incidents, loadAuditFacts, loadRecentLatenc
 import { CARD_MS, CROSSFADE_MS, chapters, takeWeightsFrom, timelineCaptions, timelineMs, toSrt, type JobPayload } from "@stage-ready/shared";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { UserFacingError, type JobContext } from "../lib/context";
-import { visionClient } from "../lib/vision";
+import { renderStatus, visionClient } from "../lib/vision";
 
 type TakePayload = Extract<JobPayload, { name: "take-process" }>;
 type RenderPayload = Extract<JobPayload, { name: "render" }>;
@@ -29,6 +29,7 @@ export async function takeProcess(payload: TakePayload, ctx: JobContext) {
       transcript = { text: result.text, words: result.words };
       if (result.durationMs > 0) durationMs = result.durationMs;
     }
+    const thumbnailUrl = take.thumbnailUrl ?? (await takeThumbnail(ctx, take, durationMs));
     await ctx.progress({ pct: 70, step: "Scoring delivery, coverage, claims and time fit" });
     const [spec] = await ctx.db.select({ id: eventSpecs.id }).from(eventSpecs).where(eq(eventSpecs.projectId, payload.projectId));
     const [criteriaRows, facts, latency, incidentRows] = await Promise.all([
@@ -48,7 +49,7 @@ export async function takeProcess(payload: TakePayload, ctx: JobContext) {
         .insert(takeScores)
         .values({ projectId: payload.projectId, takeId: take.id, ...values })
         .onConflictDoUpdate({ target: takeScores.takeId, set: values });
-      await tx.update(takes).set({ transcript, durationMs, status: "ready" }).where(eq(takes.id, take.id));
+      await tx.update(takes).set({ transcript, durationMs, thumbnailUrl, status: "ready" }).where(eq(takes.id, take.id));
     });
     await ctx.progress({ pct: 100, step: "Take scored" });
     return { takeId: take.id, total: score.total };
@@ -58,6 +59,21 @@ export async function takeProcess(payload: TakePayload, ctx: JobContext) {
       .set({ status: "failed", error: error instanceof UserFacingError ? error.message : "Processing failed." })
       .where(eq(takes.id, take.id));
     throw error;
+  }
+}
+
+/** A frame from early in an uploaded take for the take grid; best effort, so a failure never fails the take. */
+async function takeThumbnail(ctx: JobContext, take: { id: string; projectId: string; mediaUrl: string | null }, durationMs: number): Promise<string | null> {
+  if (!take.mediaUrl?.startsWith("s3://")) return null;
+  try {
+    const source = await ctx.storage.presignGet(take.mediaUrl, 900);
+    if (!source) return null;
+    const out = await ctx.storage.presignPut(`projects/${take.projectId}/takes/${take.id}/thumbnail.jpg`, "image/jpeg");
+    await visionClient(ctx.env).thumbnail(source, Math.min(2_000, Math.floor(durationMs / 3)), out.url);
+    return out.uri;
+  } catch (error) {
+    ctx.logger.warn({ err: error, takeId: take.id }, "take thumbnail failed");
+    return null;
   }
 }
 
@@ -115,6 +131,8 @@ export async function render(payload: RenderPayload, ctx: JobContext) {
     const chaptersUri = await ctx.storage.put(`${prefix}/chapters.txt`, chapterList.map((c) => `${formatClock(c.atMs)} ${c.title}`).join("\n") + "\n", "text/plain");
     const mp4 = await ctx.storage.presignPut(`${prefix}/video.mp4`, "video/mp4");
     const thumbnail = await ctx.storage.presignPut(`${prefix}/thumbnail.png`, "image/png");
+    const statusKey = `${prefix}/status.json`;
+    const statusPut = await ctx.storage.presignPut(statusKey, "application/json");
 
     // Muse Image paints the card background; the title text is drawn by the renderer, so names stay exact.
     const background = await cardArtwork(ctx, project, prefix);
@@ -129,13 +147,13 @@ export async function render(payload: RenderPayload, ctx: JobContext) {
       crossfadeMs: CROSSFADE_MS,
       cardMs: CARD_MS.intro,
       preset: ctx.env.FFMPEG_PRESET,
-      outputs: { mp4: mp4.url, thumbnail: thumbnail.url },
+      outputs: { mp4: mp4.url, thumbnail: thumbnail.url, status: statusPut.url },
     });
     const started = Date.now();
     while (status.status === "queued" || status.status === "running") {
       if (Date.now() - started > RENDER_TIMEOUT_MS) throw new UserFacingError("The render took longer than 30 minutes.");
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-      status = await vision.renderStatus(status.id);
+      status = await renderStatus(vision, ctx.storage, status.id, statusKey);
       const pct = Math.round(5 + status.progress * 93);
       await ctx.db.update(renderJobs).set({ progress: status.progress }).where(eq(renderJobs.id, job.id));
       await ctx.progress({ pct, step: status.step });
