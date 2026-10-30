@@ -13,6 +13,8 @@ Date: 2026-10-30. No stack changes and no migration (`takes.thumbnail_url` alrea
 4. **Production start.** `pnpm build` then `pnpm start` (all three Node services) or `pnpm --filter <app> start` per service. Checked here with `NODE_ENV=production`: all three boot without warnings and answer `/api/health`.
 5. **Deploy guide** in `docs/deploy.md`: managed Postgres with pgvector, Redis, R2 or S3 with a CORS rule for browser uploads, the vision service on Modal, the production environment table, and a post-deploy check. Storage must be reachable from the internet, because browsers and Modal use presigned URLs.
 
+6. **The vision service runs on CPU on Modal by default.** Modal's free plan has no GPUs. On CPU, speech to text uses faster-whisper `base.en` (int8) on 4 cores and 8 GB; `MODAL_GPU=L4` at deploy time switches to a GPU and `small.en` (float16). Renders were already CPU-bound (x264).
+
 ## Not done here
 
 - **Deploying** needs your accounts (hosting, database, Redis, storage, Modal, a GitHub OAuth app). The guide lists every step.
