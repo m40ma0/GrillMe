@@ -64,3 +64,22 @@ def test_render_endpoint_reports_progress_until_done(tmp_path, monkeypatch):
 def test_render_rejects_unsupported_sources(tmp_path):
     with pytest.raises(ValueError):
         render(request(clips=[{"source": "file:///etc/passwd", "inMs": 0, "outMs": 1000, "chapter": "Hook"}]), tmp_path, lambda *_: None)
+
+
+def test_card_uses_generated_artwork_and_falls_back_without_it(tmp_path):
+    from PIL import Image
+
+    from app.render import card_png
+
+    art = tmp_path / "art.png"
+    Image.new("RGB", (1024, 1024), (200, 40, 40)).save(art)
+    card_png(tmp_path / "with.png", "Signal Garden", "Demo", art)
+    card_png(tmp_path / "plain.png", "Signal Garden", "Demo", None)
+    broken = tmp_path / "broken.png"
+    broken.write_bytes(b"not an image")
+    card_png(tmp_path / "broken-out.png", "Signal Garden", "Demo", broken)
+    with Image.open(tmp_path / "with.png") as a, Image.open(tmp_path / "plain.png") as p, Image.open(tmp_path / "broken-out.png") as b:
+        assert a.size == p.size == (1920, 1080)
+        corner_art, corner_plain = a.getpixel((5, 5)), p.getpixel((5, 5))
+        assert corner_art != corner_plain  # the artwork shows through
+        assert b.getpixel((5, 5)) == corner_plain  # unreadable artwork falls back to the plain card

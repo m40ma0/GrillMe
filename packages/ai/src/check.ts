@@ -1,5 +1,6 @@
 import { ModelEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
 import pino from "pino";
+import { MetaImageAdapter } from "./image";
 import { MetaModelAdapter } from "./meta";
 import { personaStylesV1 } from "./prompts/personas.v1";
 import { slideVerifyV1 } from "./prompts/slideVerify.v1";
@@ -83,6 +84,18 @@ try {
 } catch (e) {
   record("Image input (slide verification)", false, errorText(e));
 }
+
+if (env.MODEL_IMAGE) {
+  try {
+    const started = performance.now();
+    const bytes = await new MetaImageAdapter({ baseUrl: env.META_API_BASE_URL as string, apiKey: key, model: env.MODEL_IMAGE }, logger).generate({
+      prompt: "A calm abstract gradient background, no text.",
+    });
+    record(`Muse Image (${env.MODEL_IMAGE})`, true, `${bytes.length} bytes in ${Math.round(performance.now() - started)} ms`);
+  } catch (e) {
+    record(`Muse Image (${env.MODEL_IMAGE})`, false, errorText(e));
+  }
+} else record("Muse Image", null, "MODEL_IMAGE is empty, so title cards stay plain");
 
 if (env.META_RESPONSE_FORMAT !== "json_schema") {
   try {

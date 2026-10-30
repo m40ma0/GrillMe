@@ -46,7 +46,9 @@ export interface Vision {
 }
 
 export interface ImageGen {
-  generate(input: { prompt: string; width: number; height: number }): Promise<Uint8Array>;
+  readonly modelId: string;
+  /** One image from a text prompt; the bytes as returned (PNG or JPEG). */
+  generate(input: { prompt: string }, options?: { signal?: AbortSignal }): Promise<Uint8Array>;
 }
 
 export interface STT {
