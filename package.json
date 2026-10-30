@@ -2,6 +2,9 @@
   "name": "stage-ready",
   "private": true,
   "packageManager": "pnpm@11.14.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
