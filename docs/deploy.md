@@ -37,8 +37,10 @@ modal token new
 modal secret create stage-ready-vision VISION_SERVICE_TOKEN=$(openssl rand -hex 24)
 ```
 
+Run it from the service's folder, so Modal finds `requirements.txt` and the `app` package:
+
 ```bash
-modal deploy services/vision/modal_app.py
+cd services/vision && modal deploy modal_app.py
 ```
 
 Put the printed URL in `VISION_SERVICE_URL` and the same token in `VISION_SERVICE_TOKEN`. Modal may run several containers: renders mirror their status to storage, so a status poll that reaches another container still gets an answer (see `docs/decisions/0006-m6-decisions.md`).

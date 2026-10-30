@@ -1,7 +1,8 @@
 """Modal deployment of the vision and media service on a GPU (L4 by default; A10G also works).
 
-    modal serve services/vision/modal_app.py     # dev URL, hot reload
-    modal deploy services/vision/modal_app.py    # stable URL for VISION_SERVICE_URL
+Run from services/vision (paths below are relative to it):
+    modal serve modal_app.py     # dev URL, hot reload
+    modal deploy modal_app.py    # stable URL for VISION_SERVICE_URL
 
 Secrets: create a Modal secret named "stage-ready-vision" with VISION_SERVICE_TOKEN and, once you have
 Meta's SAM 3.1 checkpoint, SAM_CHECKPOINT (a path inside the "stage-ready-models" volume).
