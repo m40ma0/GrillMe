@@ -1,4 +1,4 @@
-// One public port for a Hugging Face Space: WebSockets on /ws go to the realtime server, everything else to the web app.
+// One public port for the single-container deploy (Modal, or any Docker host): WebSockets on /ws go to the realtime server, everything else to the web app.
 import http from "node:http";
 import net from "node:net";
 

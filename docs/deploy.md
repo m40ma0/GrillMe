@@ -1,6 +1,6 @@
 # Deploying Stage Ready
 
-For a free deployment with no card, follow steps 1 to 3 below (database, storage, Modal), then `docs/deploy-huggingface.md`, which runs the three Node services and Redis in one Hugging Face Space.
+For a free deployment with no card, follow steps 1 and 2 below (database, storage, the vision service on Modal), then **Free option: everything else on Modal** at the end. It runs the three Node services and Redis in one Modal container.
 
 Stage Ready runs as three Node processes, a Python service on Modal, and four managed backing services. Any host that runs Node 22 with long-lived processes and WebSockets works (a VM, Fly.io, Railway, Render). The web app can also go on Vercel; the realtime server and the worker cannot, since they hold WebSockets and a job queue open.
 
@@ -115,6 +115,67 @@ Put TLS in front of web and realtime (the platform's proxy usually does this). T
 2. Sign in with GitHub, open the Demo Mode project, and run a 1-minute rehearsal: judges speak, claims appear.
 3. Record one Director take: it uploads, gets a thumbnail and a score. Render the Demo Mode cut; the MP4, SRT, thumbnail and chapters download.
 4. Open DemoGuard, build a step map and run pre-flight.
+
+## Free option: everything else on Modal
+
+`deploy/modal/stage_ready.py` runs web, realtime, the worker and Redis in one CPU container on Modal, behind one address. A small router (`deploy/container/router.mjs`) sends WebSockets on `/ws` to realtime and everything else to web; `deploy/container/start.sh` starts Redis, applies migrations, then the services. Redis is not needed from step 1.
+
+What to know:
+
+- One container at most, since Redis and live sessions are in its memory. It scales to zero after 20 idle minutes and starts again on the next visit (about a minute: migrations, then the services). It only uses Modal credits while it is up.
+- Jobs still queued when it scales down or restarts are lost; everything in the database and storage is kept.
+- It deploys the code you have checked out, so `git pull` first.
+
+1. **Address.** The app is served at `https://<workspace>--stage-ready.modal.run`, where `<workspace>` is your Modal workspace name (shown when you ran `modal setup`). Call it `APP_URL`.
+2. **GitHub sign-in.** Create a GitHub OAuth app (GitHub → Settings → Developer settings → OAuth Apps) with homepage `APP_URL` and callback `APP_URL/api/auth/callback/github`.
+3. **Storage CORS.** Allow `APP_URL` on the bucket (see step 1).
+4. **Settings.** Create `.env.production` at the repo root. Git ignores it and the deploy never uploads it. Fill it in:
+
+   ```
+   PUBLIC_HOST=<workspace>--stage-ready.modal.run
+   DATABASE_URL=
+   S3_ENDPOINT=
+   S3_BUCKET=
+   S3_ACCESS_KEY=
+   S3_SECRET_KEY=
+   S3_REGION=
+   AUTH_SECRET=
+   REALTIME_JWT_SECRET=
+   AUTH_GITHUB_ID=
+   AUTH_GITHUB_SECRET=
+   VISION_SERVICE_URL=
+   VISION_SERVICE_TOKEN=
+   MODEL_API_KEY=
+   META_API_BASE_URL=https://api.meta.ai/v1
+   META_API_STYLE=responses
+   MODEL_SPARK=muse-spark-1.3
+   MODEL_WONDER=muse-wonder-1.0
+   MODEL_IMAGE=muse-image-1.0
+   MODEL_SAM=sam-3.1
+   META_REASONING_EFFORT_SPARK=low
+   META_REASONING_EFFORT_WONDER=high
+   META_RESPONSE_FORMAT=json_schema
+   ```
+
+   `PUBLIC_HOST` sets `AUTH_URL`, `REALTIME_URL` and `WEB_ORIGIN`; `NODE_ENV` and `REDIS_URL` are set in the image. Then store it in Modal:
+
+   ```bash
+   modal secret create stage-ready-app --from-dotenv .env.production
+   ```
+
+   After changing the file, run it again with `--force`, then redeploy.
+
+5. **Deploy** from the repo root (the first build installs and builds everything, several minutes):
+
+   ```bash
+   modal deploy deploy/modal/stage_ready.py
+   ```
+
+6. **Check.** Open `APP_URL/api/health` (the first visit wakes the container: allow a minute). In the Modal dashboard, the `stage-ready` app's logs show `Migrations applied.`, `router on :7860`, realtime `Server listening` and `worker listening on queue stage-ready-jobs` with `"models":"meta"`. Then sign in at `APP_URL` and run a short rehearsal.
+
+To update: `git pull`, then deploy again.
+
+The same container also runs on any Docker host with `deploy/container/Dockerfile` (settings as environment variables, port 7860).
 
 ## Recording the submission video
 
