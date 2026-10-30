@@ -1,5 +1,7 @@
 # Deploying Stage Ready
 
+For a free deployment with no card, follow steps 1 to 3 below (database, storage, Modal), then `docs/deploy-huggingface.md`, which runs the three Node services and Redis in one Hugging Face Space.
+
 Stage Ready runs as three Node processes, a Python service on Modal, and four managed backing services. Any host that runs Node 22 with long-lived processes and WebSockets works (a VM, Fly.io, Railway, Render). The web app can also go on Vercel; the realtime server and the worker cannot, since they hold WebSockets and a job queue open.
 
 | Piece                     | What it is                                               | Suggested home                                      |

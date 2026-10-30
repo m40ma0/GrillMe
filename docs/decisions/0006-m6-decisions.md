@@ -15,6 +15,8 @@ Date: 2026-10-30. No stack changes and no migration (`takes.thumbnail_url` alrea
 
 6. **The vision service runs on CPU on Modal by default.** Modal's free plan has no GPUs. On CPU, speech to text uses faster-whisper `base.en` (int8) on 4 cores and 8 GB; `MODAL_GPU=L4` at deploy time switches to a GPU and `small.en` (float16). Renders were already CPU-bound (x264).
 
+7. **Free single-container deploy on a Hugging Face Docker Space** (`deploy/huggingface/`, guide in `docs/deploy-huggingface.md`). Web, realtime, worker and Redis run in one container; a dependency-free Node router on port 7860 sends `/ws` upgrades to realtime and the rest to web, since a Space exposes one port. `start.sh` starts Redis (fails fast if it does not come up), runs migrations, starts the four processes, and exits when any one exits so the Space restarts it. The public URLs default from `SPACE_HOST`. The Dockerfile clones the repo at build time (an optional `GITHUB_TOKEN` build secret covers a private repo), so the Space holds only two files. Tested here by building the image from this checkout and running it as uid 1000 with production settings: all four processes start, health answers through the router, and `/ws` reaches realtime with its origin and token checks intact. Not verified: the Hugging Face build itself (this sandbox cannot reach Debian's package mirrors, so the local test took Redis from the official `redis:7-bookworm` image instead of apt).
+
 ## Not done here
 
 - **Deploying** needs your accounts (hosting, database, Redis, storage, Modal, a GitHub OAuth app). The guide lists every step.

@@ -63,7 +63,7 @@ Build the **step map** from a golden-run rehearsal (one step per timed step, edi
 
 ## Deploying
 
-See `docs/deploy.md`: managed Postgres (pgvector), Redis and S3/R2, the vision service on Modal, the production environment, then `pnpm build`, `pnpm db:migrate` and `pnpm start`. Services refuse to boot in production with placeholder secrets, `ws://` realtime URLs or the dev auth bypass.
+See `docs/deploy.md` (or `docs/deploy-huggingface.md` for a free single-container deploy on a Hugging Face Space): managed Postgres (pgvector), Redis and S3/R2, the vision service on Modal, the production environment, then `pnpm build`, `pnpm db:migrate` and `pnpm start`. Services refuse to boot in production with placeholder secrets, `ws://` realtime URLs or the dev auth bypass.
 
 ## Commands
 
