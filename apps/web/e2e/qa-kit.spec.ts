@@ -22,7 +22,8 @@ test("Q&A Kit: ranked questions, capped scripts, verified slides, drill and the 
   await page.getByRole("button", { name: "Start drill" }).click();
   await expect(page.getByRole("timer")).toBeVisible();
   await page.getByRole("button", { name: "Play a strong answer" }).click();
-  await expect(page.getByRole("button", { name: "Next question" })).toBeVisible();
+  // The dev server compiles the drill route on its first request, which can take over 10 s.
+  await expect(page.getByRole("button", { name: "Next question" })).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText("Directness")).toBeVisible();
   await page.getByRole("button", { name: "End drill" }).click();
 
