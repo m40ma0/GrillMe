@@ -20,6 +20,7 @@ export * from "./embed";
 export * from "./rules";
 export * from "./takes";
 export * from "./qa";
+export * from "./sam";
 export * from "./telemetry";
 
 export interface Ai {

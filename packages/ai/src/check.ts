@@ -2,6 +2,7 @@ import { ModelEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
 import pino from "pino";
 import { MetaImageAdapter } from "./image";
 import { MetaModelAdapter } from "./meta";
+import { samSegment } from "./sam";
 import { personaStylesV1 } from "./prompts/personas.v1";
 import { slideVerifyV1 } from "./prompts/slideVerify.v1";
 import { metaApiKey } from "./types";
@@ -96,6 +97,16 @@ if (env.MODEL_IMAGE) {
     record(`Muse Image (${env.MODEL_IMAGE})`, false, errorText(e));
   }
 } else record("Muse Image", null, "MODEL_IMAGE is empty, so title cards stay plain");
+
+if (env.MODEL_SAM) {
+  try {
+    const started = performance.now();
+    const boxes = await samSegment({ baseUrl: env.META_API_BASE_URL as string, apiKey: key, model: env.MODEL_SAM }, "error dialog", PIXEL);
+    record(`SAM (${env.MODEL_SAM})`, true, `answered in ${Math.round(performance.now() - started)} ms (${boxes.length} match(es) on a blank test image, 0 expected)`);
+  } catch (e) {
+    record(`SAM (${env.MODEL_SAM})`, false, errorText(e));
+  }
+} else record("SAM", null, "MODEL_SAM is empty, so UI tracking uses the local vision service or frame hashes");
 
 if (env.META_RESPONSE_FORMAT !== "json_schema") {
   try {

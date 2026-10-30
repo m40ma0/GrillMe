@@ -23,7 +23,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import type { Logger } from "pino";
 import { fineHash, hexHamming } from "../auditor/canned";
 import { DEFAULT_STOPWATCH, Stopwatch } from "../auditor/stopwatch";
-import type { VisionTracker } from "../vision/tracker";
+import type { Tracker } from "../vision/tracker";
 import { BLANK_STD, RedBaseline, frameStats } from "./detectors";
 
 export type Sender = (message: ServerMessage) => void;
@@ -83,7 +83,7 @@ export async function loadDemoGuardContext(db: Db, sessionId: string, projectId:
 export interface DemoGuardDeps {
   db: Db;
   logger: Logger;
-  tracker: VisionTracker;
+  tracker: Tracker;
   onEnded?: (projectId: string, sessionId: string) => void;
 }
 
@@ -283,7 +283,8 @@ export class DemoGuardSession {
     else this.blankSinceMs = null;
     const finish = (regions: UiRegion[] | null) => {
       const samError = regions?.some((r) => r.label === "error_dialog" && r.score >= 0.5) ?? false;
-      const error = this.visionMode === "sam" ? samError : errorByPixels;
+      // SAM catches dialogs of any colour; the red-region heuristic stays on as a backstop.
+      const error = samError || errorByPixels;
       const spinner = regions?.some((r) => r.label === "spinner" || r.label === "progress_bar") ?? false;
       this.watch(atMs, { error, blank: this.blankSinceMs !== null && atMs - this.blankSinceMs >= BLANK_FOR_MS, spinner });
       this.onStopwatch(this.stopwatch.frame(atMs, distance, regions));
@@ -294,7 +295,7 @@ export class DemoGuardSession {
 
   private watch(atMs: number, seen: { error: boolean; blank: boolean; spinner: boolean }) {
     const step = this.ctx.steps[this.state.stepIndex];
-    if (seen.error) this.signal("error_dialog", this.visionMode === "sam" ? "SAM 3.1 found an error dialog or toast." : "A red error banner or dialog appeared (pixel heuristic).", atMs);
+    if (seen.error) this.signal("error_dialog", "An error dialog, toast or banner appeared on screen.", atMs);
     if (seen.blank) this.signal("blank_screen", "The captured screen is blank.", atMs);
     if (seen.spinner) this.spinnerSinceMs ??= atMs;
     else this.spinnerSinceMs = null;
