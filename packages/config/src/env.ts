@@ -24,7 +24,7 @@ export function loadRootEnv(start = process.cwd()): string | null {
   return null;
 }
 
-const ModelEnv = z.object({
+export const ModelEnv = z.object({
   /** Optional per-model prices, JSON: {"<model id>": {"inputPerMTok": 0.5, "outputPerMTok": 1.5}}. Without them cost shows as unknown. */
   MODEL_PRICES: z.preprocess(empty, z.string().optional()),
   META_API_BASE_URL: optionalUrl,

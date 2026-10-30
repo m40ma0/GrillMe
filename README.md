@@ -66,6 +66,7 @@ Build the **step map** from a golden-run rehearsal (one step per timed step, edi
 - `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test`, `pnpm build`: workspace checks (CI runs all of them)
 - `pnpm test:e2e`: Playwright in Demo Mode with fake camera and mic (needs FFmpeg; starts `pnpm dev` if it is not running)
 - `cd services/vision && .venv/bin/python -m pytest`: vision service tests
+- `pnpm ai:check`: one live call per configured Meta model with your key (run it after filling `.env`); prints what passed and which JSON mode to use
 - `pnpm companion --url '<from the DemoGuard page>'`: the DemoGuard companion (see `docs/companion.md`)
 
 ## What M1 includes

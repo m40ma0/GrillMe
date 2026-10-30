@@ -15,7 +15,8 @@
     "companion": "pnpm --filter @stage-ready/companion start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "ai:check": "pnpm --filter @stage-ready/ai check"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
