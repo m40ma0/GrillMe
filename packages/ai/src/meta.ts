@@ -8,8 +8,11 @@ import { AiError, type GenerateResult, type LLM, type ModelRole, type Prompt, ty
 // which the Meta Model API uses, with reasoning; or the older chat-completions protocol
 // (POST {META_API_BASE_URL}/chat/completions). Base URL, key and model IDs come from env only.
 
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high";
+
 export interface ReasoningConfig {
-  effort: "none" | "minimal" | "low" | "medium" | "high";
+  /** Per model role: Spark serves live, latency-sensitive calls; Wonder does background reasoning. */
+  effort: Record<ModelRole, ReasoningEffort>;
   summary: "auto" | "concise" | "detailed" | "none";
   /** Return encrypted reasoning items so the validation retry continues from them without server-side storage. */
   encrypted: boolean;
@@ -99,17 +102,17 @@ export class MetaModelAdapter implements LLM, Vision {
   }
 
   /** One Responses API call. Returns the output text, usage, and the output items to replay on a retry. */
-  private async respond(model: string, input: InputItem[], format: Record<string, unknown> | undefined, signal?: AbortSignal) {
+  private async respond(role: ModelRole, input: InputItem[], format: Record<string, unknown> | undefined, signal?: AbortSignal) {
+    const model = this.config.models[role];
     const timeout = AbortSignal.timeout(this.config.timeoutMs ?? 300_000);
     const r = this.config.reasoning;
+    const effort = r?.effort[role] ?? "none";
     const body = JSON.stringify({
       model,
       input,
       store: false,
       ...(format ? { text: { format } } : {}),
-      ...(r && r.effort !== "none"
-        ? { reasoning: { effort: r.effort, ...(r.summary !== "none" ? { summary: r.summary } : {}) }, ...(r.encrypted ? { include: ["reasoning.encrypted_content"] } : {}) }
-        : {}),
+      ...(r && effort !== "none" ? { reasoning: { effort, ...(r.summary !== "none" ? { summary: r.summary } : {}) }, ...(r.encrypted ? { include: ["reasoning.encrypted_content"] } : {}) } : {}),
     });
     for (let attempt = 0; ; attempt++) {
       let response: Response;
@@ -215,7 +218,7 @@ export class MetaModelAdapter implements LLM, Vision {
     const started = performance.now();
     const usage: Usage = { inputTokens: 0, outputTokens: 0 };
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const reply = await this.respond(modelId, input, this.responsesFormat(prompt as Prompt<unknown>), options.signal);
+      const reply = await this.respond(prompt.model, input, this.responsesFormat(prompt as Prompt<unknown>), options.signal);
       usage.inputTokens = reply.usage.inputTokens === null ? null : (usage.inputTokens ?? 0) + reply.usage.inputTokens;
       usage.outputTokens = reply.usage.outputTokens === null ? null : (usage.outputTokens ?? 0) + reply.usage.outputTokens;
       const parsed = parseReply(reply.text, prompt.schema);
@@ -237,7 +240,7 @@ export class MetaModelAdapter implements LLM, Vision {
   async describeFrame(input: { jpeg: Uint8Array; question: string }, options: { signal?: AbortSignal } = {}): Promise<string> {
     if (this.config.api === "responses") {
       const reply = await this.respond(
-        this.config.models.spark,
+        "spark",
         [
           {
             role: "user",

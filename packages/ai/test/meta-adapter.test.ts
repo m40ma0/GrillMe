@@ -96,7 +96,7 @@ const responsesAdapter = () =>
       models: { spark: "muse-spark-1.3", wonder: "muse-wonder-1.0" },
       responseFormat: "json_object",
       api: "responses",
-      reasoning: { effort: "high", summary: "auto", encrypted: true },
+      reasoning: { effort: { spark: "high", wonder: "high" }, summary: "auto", encrypted: true },
     },
     logger,
   );
@@ -172,5 +172,36 @@ describe("createAi with Meta's settings", () => {
     expect(url).toBe("https://api.meta.ai/v1/responses");
     expect((init.headers as Record<string, string>).authorization).toBe("Bearer k2");
     expect((JSON.parse(String(init.body)) as { model: string }).model).toBe("muse-spark-1.3");
+  });
+});
+
+describe("reasoning effort per model", () => {
+  it("defaults to low for Spark (live calls) and high for Wonder (background work)", async () => {
+    const { reasoningEffort } = await import("../src");
+    expect(reasoningEffort({})).toEqual({ spark: "low", wonder: "high" });
+    expect(reasoningEffort({ META_REASONING_EFFORT: "medium" })).toEqual({ spark: "low", wonder: "medium" });
+    expect(reasoningEffort({ META_REASONING_EFFORT_SPARK: "minimal", META_REASONING_EFFORT_WONDER: "high", META_REASONING_EFFORT: "low" })).toEqual({ spark: "minimal", wonder: "high" });
+  });
+
+  it("sends each model its own effort, and none at all when effort is none", async () => {
+    const fetchMock = vi.fn(async () => reply(validStyles));
+    vi.stubGlobal("fetch", fetchMock);
+    const a = new MetaModelAdapter(
+      {
+        baseUrl: "https://api.meta.ai/v1",
+        apiKey: "k",
+        models: { spark: "muse-spark-1.3", wonder: "muse-wonder-1.0" },
+        responseFormat: "json_object",
+        api: "responses",
+        reasoning: { effort: { spark: "none", wonder: "high" }, summary: "auto", encrypted: true },
+      },
+      logger,
+    );
+    await a.generateObject(prompt());
+    await a.generateObject({ ...prompt(), model: "wonder" });
+    const bodies = fetchMock.mock.calls.map((c) => JSON.parse(String((c as unknown as [string, RequestInit])[1].body)) as Record<string, unknown>);
+    expect(bodies[0]).not.toHaveProperty("reasoning");
+    expect(bodies[0]?.model).toBe("muse-spark-1.3");
+    expect(bodies[1]).toMatchObject({ model: "muse-wonder-1.0", reasoning: { effort: "high", summary: "auto" } });
   });
 });
