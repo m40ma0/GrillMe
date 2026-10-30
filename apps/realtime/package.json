@@ -1,1 +1,37 @@
-{"name":"@stage-ready/realtime","version":"0.1.0","private":true,"type":"module","scripts":{"dev":"tsx watch src/index.ts","build":"tsc -p tsconfig.json","lint":"tsc --noEmit -p tsconfig.json","typecheck":"tsc --noEmit -p tsconfig.json"},"dependencies":{"@fastify/websocket":"^11.0.2","fastify":"^5.2.1","ioredis":"^5.6.0","pino":"^9.6.0","zod":"^3.24.2"},"devDependencies":{"@types/node":"^22.13.10","tsx":"^4.19.3","typescript":"^5.8.3"}}
+{
+  "name": "@stage-ready/realtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.0.2",
+    "@opentelemetry/api": "^1.10.0",
+    "@stage-ready/ai": "workspace:*",
+    "@stage-ready/config": "workspace:*",
+    "@stage-ready/db": "workspace:*",
+    "@stage-ready/shared": "workspace:*",
+    "bullmq": "^5.81.5",
+    "drizzle-orm": "^0.41.0",
+    "fastify": "^5.2.1",
+    "ioredis": "^5.6.0",
+    "jpeg-js": "^0.4.4",
+    "pino": "^9.6.0",
+    "ws": "^8.22.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.7"
+  }
+}

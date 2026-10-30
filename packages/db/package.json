@@ -1,1 +1,32 @@
-{"name":"@stage-ready/db","version":"0.1.0","private":true,"type":"module","scripts":{"db:generate":"drizzle-kit generate","db:migrate":"drizzle-kit migrate","db:seed":"tsx src/seed.ts","lint":"tsc --noEmit","typecheck":"tsc --noEmit"},"dependencies":{"@stage-ready/shared":"workspace:*","drizzle-orm":"^0.41.0","postgres":"^3.4.5"},"devDependencies":{"@types/node":"^22.13.10","drizzle-kit":"^0.30.5","tsx":"^4.19.3","typescript":"^5.8.3"}}
+{
+  "name": "@stage-ready/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./seed": "./src/seed.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/migrate.ts",
+    "db:seed": "tsx src/seed.ts",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.10.0",
+    "@stage-ready/ai": "workspace:*",
+    "@stage-ready/config": "workspace:*",
+    "@stage-ready/shared": "workspace:*",
+    "drizzle-orm": "^0.41.0",
+    "postgres": "^3.4.5",
+    "uuidv7": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "drizzle-kit": "^0.30.5",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3"
+  }
+}

@@ -4,4 +4,6 @@ packages:
   - services/*
 allowBuilds:
   esbuild: true
+  simple-git-hooks: true
   msgpackr-extract: false
+  protobufjs: false

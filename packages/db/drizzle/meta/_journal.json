@@ -5,8 +5,29 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1793258799287,
-      "tag": "0000_lively_wrecking_crew",
+      "when": 1793260855008,
+      "tag": "0000_init",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793267725805,
+      "tag": "0001_m3_audit_memory",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793272243700,
+      "tag": "0002_m4_director",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793280470426,
+      "tag": "0003_m5_demoguard",
       "breakpoints": true
     }
   ]

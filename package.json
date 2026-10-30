@@ -12,10 +12,34 @@
     "db:generate": "pnpm --filter @stage-ready/db db:generate",
     "db:migrate": "pnpm --filter @stage-ready/db db:migrate",
     "db:seed": "pnpm --filter @stage-ready/db db:seed",
-    "companion": "pnpm --filter @stage-ready/companion start"
+    "companion": "pnpm --filter @stage-ready/companion start",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^16.5.0",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.9.10",
+    "simple-git-hooks": "^2.14.0",
     "turbo": "^2.5.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.72.1"
+  },
+  "type": "module",
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,yml,yaml,css}": [
+      "prettier --write"
+    ]
   }
 }

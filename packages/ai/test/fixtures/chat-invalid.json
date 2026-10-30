@@ -1,0 +1,5 @@
+{
+  "id": "rec-1",
+  "choices": [{ "index": 0, "message": { "role": "assistant", "content": "```json\n{\"styles\": [{\"role\": \"technical\", \"questionStyle\": \"short\"}]}\n```" } }],
+  "usage": { "prompt_tokens": 410, "completion_tokens": 22 }
+}

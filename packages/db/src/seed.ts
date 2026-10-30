@@ -1,56 +1,268 @@
-import postgres from "postgres";
-import { demoModeProject } from "@stage-ready/shared";
+import { heuristicQuestionBank, scoreTranscribedTake } from "@stage-ready/ai";
+import { and, eq } from "drizzle-orm";
+import { DbEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
+import {
+  DEMO_FALLBACK_CLIP,
+  DEMO_STRONGEST_MOMENT,
+  DEMO_PROJECT_NAME,
+  PERSONA_ROLE_LABEL,
+  autoSectionPlan,
+  demoEventSpec,
+  demoPatterns,
+  demoPersonas,
+  demoRubricHeatmap,
+  demoPitchScript,
+  demoReadme,
+  demoSubmissionText,
+  demoRepo,
+  demoSession,
+  demoSteps,
+  demoTakeScripts,
+  demoTakes,
+  demoWinners,
+  buildAutoEdl,
+  latencySummary,
+  spreadWords,
+  takeWeightsFrom,
+} from "@stage-ready/shared";
+import { loadAuditFacts } from "./facts";
+import { createDb, type Db } from "./index";
+import * as t from "./schema";
 
-const connectionString = process.env.DATABASE_URL ?? "postgres://stage:stage@localhost:5432/stageready";
-const sql = postgres(connectionString);
+export const DEV_USER = { email: "dev@stage-ready.local", name: "Local developer", githubLogin: null };
 
-try {
-  await sql`CREATE EXTENSION IF NOT EXISTS vector`;
-  await sql.begin(async (tx) => {
-    const [existing] = await tx`SELECT id FROM projects WHERE name = ${demoModeProject.name} ORDER BY created_at LIMIT 1`;
-    const [created] = existing ? [] : await tx`
-      INSERT INTO projects (name, tagline, timezone)
-      VALUES (${demoModeProject.name}, ${demoModeProject.tagline}, ${demoModeProject.timezone})
-      RETURNING id
-    `;
-    const projectId = (existing ?? created)?.id as string | undefined;
-    if (!projectId) throw new Error("Demo project could not be created.");
-    await tx`DELETE FROM events WHERE project_id = ${projectId}`;
-    await tx`DELETE FROM winners WHERE project_id = ${projectId}`;
-    await tx`DELETE FROM sessions WHERE project_id = ${projectId}`;
-    await tx`DELETE FROM takes WHERE project_id = ${projectId}`;
-    await tx`DELETE FROM fix_tasks WHERE project_id = ${projectId}`;
-    await tx`DELETE FROM personas WHERE project_id = ${projectId}`;
-    await tx`DELETE FROM step_maps WHERE project_id = ${projectId}`;
-    await tx`DELETE FROM coach_notes WHERE project_id = ${projectId}`;
-    await tx`INSERT INTO events (project_id, spec) VALUES (${projectId}, ${tx.json(demoModeProject.event)})`;
-    for (const winner of demoModeProject.winners) await tx`INSERT INTO winners (project_id, profile, source_url) VALUES (${projectId}, ${tx.json(winner)}, ${winner.sourceUrl})`;
-    const [session] = await tx`INSERT INTO sessions (project_id, mode, score, transcript) VALUES (${projectId}, 'full_pitch', 72, 'We turn noisy field reports into a clear response plan. The summary is instant, taking 9.2 seconds on this run. Signal Garden supports offline mode. We use encrypted storage. The dashboard groups reports by location. Our classifier reaches 92% accuracy. Teams can compare the latest incident with previous reports. We help responders prioritize follow-up.') RETURNING id`;
-    const sessionId = session?.id as string;
-    const demoClaims = [
-      ["We turn noisy field reports into a clear response plan.", "feature", "verified", "Result panel visible at 00:12"],
-      ["The summary is instant, taking 9.2 seconds on this run.", "performance", "contradicted", "Measured response: 9.2 seconds"],
-      ["Signal Garden supports offline mode.", "feature", "not_shown", "No offline step shown in the recording"],
-      ["We use encrypted storage.", "security_privacy", "unverified", "No encryption implementation evidence in fixture repository"],
-      ["The dashboard groups reports by location.", "feature", "verified", "Location grouping visible at 00:41"],
-      ["Our classifier reaches 92% accuracy.", "accuracy", "unverified", "No evaluation result attached"],
-      ["Teams can compare the latest incident with previous reports.", "feature", "verified", "Comparison view visible at 01:03"],
-      ["We help responders prioritize follow-up.", "impact", "unverified", "No measured outcome attached"],
-    ] as const;
-    for (const [index, [claim, type, status, evidence]] of demoClaims.entries()) await tx`INSERT INTO claims (session_id, text, type, status, timestamp_seconds, evidence) VALUES (${sessionId}, ${claim}, ${type}, ${status}, ${index * 15 + 12}, ${evidence})`;
-    for (const [step, duration] of [["Generate summary", 9200], ["Load comparison", 640], ["Filter reports", 510]] as const) await tx`INSERT INTO latency_samples (session_id, step, duration_ms, sample_time) VALUES (${sessionId}, ${step}, ${duration}, now())`;
-    for (const [persona, question, at] of [["Technical", "How did you evaluate the 92% accuracy figure?", 95], ["Impact and domain", "What evidence shows this changes responder outcomes?", 128], ["Product and business", "Who owns follow-up when the system is wrong?", 153]] as const) await tx`INSERT INTO judge_turns (session_id, persona, question, timestamp_seconds) VALUES (${sessionId}, ${persona}, ${question}, ${at})`;
-    for (const [section, score, duration] of [["Hook", 81, 18], ["Problem", 74, 26], ["Demo", 86, 58], ["How it works", 70, 34], ["Impact", 68, 27], ["Close", 79, 17]] as const) {
-      for (const offset of [0, 1]) await tx`INSERT INTO takes (project_id, section, score, duration_seconds, media_path, breakdown) VALUES (${projectId}, ${section}, ${score - offset * 6}, ${duration + offset * 3}, ${`demo/${section.toLowerCase().replaceAll(" ", "-")}-${offset + 1}.webm`}, ${tx.json({ delivery: score, coverage: score - 3, demoSuccess: 90, timeFit: 80 })})`;
+export async function ensureDevUser(db: Db) {
+  const [existing] = await db.select().from(t.users).where(eq(t.users.email, DEV_USER.email));
+  if (existing) return existing;
+  const [created] = await db.insert(t.users).values(DEV_USER).returning();
+  if (!created) throw new Error("Could not create the local developer user.");
+  return created;
+}
+
+/** Replaces the Demo Mode project for `ownerId` with fresh fixtures. Returns its id. */
+export async function seedDemoProject(db: Db, ownerId: string): Promise<string> {
+  return db.transaction(async (tx) => {
+    await tx.delete(t.projects).where(and(eq(t.projects.ownerId, ownerId), eq(t.projects.demoMode, true)));
+    const [project] = await tx
+      .insert(t.projects)
+      .values({
+        ownerId,
+        name: DEMO_PROJECT_NAME,
+        tagline: "Turn noisy field reports into a clear response plan.",
+        videoLimitSec: 180,
+        timezone: "Asia/Singapore",
+        demoMode: true,
+        pitchScript: demoPitchScript,
+        submissionText: demoSubmissionText,
+        strongestMoment: DEMO_STRONGEST_MOMENT,
+        setupStep: 5,
+      })
+      .returning();
+    if (!project) throw new Error("Demo project could not be created.");
+    const projectId = project.id;
+
+    const [spec] = await tx
+      .insert(t.eventSpecs)
+      .values({
+        projectId,
+        name: demoEventSpec.name,
+        sourceUrls: [],
+        tracks: demoEventSpec.tracks,
+        requirements: demoEventSpec.requirements,
+        requiredTech: demoEventSpec.requiredTech,
+        deadlineAt: demoEventSpec.requirements.deadlineIso ? new Date(demoEventSpec.requirements.deadlineIso) : null,
+        weightsInferred: demoEventSpec.weightsInferred,
+        sourceQuotes: demoEventSpec.sourceQuotes,
+        peopleNamed: demoEventSpec.peopleNamed,
+        confirmedAt: new Date(),
+      })
+      .returning();
+    if (!spec) throw new Error("Demo EventSpec could not be created.");
+    const criteriaRows = await tx
+      .insert(t.criteria)
+      .values(
+        demoEventSpec.criteria.map((c, order) => ({
+          projectId,
+          eventSpecId: spec.id,
+          order,
+          name: c.name,
+          description: c.description,
+          weight: c.weight,
+          sourceQuote: demoEventSpec.sourceQuotes[`criteria.${order}`] ?? null,
+        })),
+      )
+      .returning();
+
+    await tx.insert(t.pastWinners).values(demoWinners.map((w) => ({ projectId, sourceUrl: w.sourceUrl, title: w.profile.title, placement: w.profile.placement, profile: w.profile })));
+    await tx.insert(t.winningPatterns).values(demoPatterns.map((p) => ({ projectId, ...p })));
+
+    const [repo] = await tx
+      .insert(t.repos)
+      .values({
+        projectId,
+        githubFullName: demoRepo.githubFullName,
+        commitSha: demoRepo.commitSha,
+        visibility: demoRepo.visibility,
+        fileCount: 38,
+        digestTokens: 21_400,
+        readme: demoReadme,
+        dependencies: [{ name: "generative-ai-sdk (fictional)", version: "1.0.0", manifest: "package.json" }],
+      })
+      .returning();
+    if (!repo) throw new Error("Demo repo could not be created.");
+    await tx.insert(t.repoFindings).values(demoRepo.findings.map((f) => ({ projectId, repoId: repo.id, ...f })));
+
+    const personaRows = await tx
+      .insert(t.personas)
+      .values(demoPersonas.map((p) => ({ projectId, ...p })))
+      .returning();
+    const personaByRole = new Map(personaRows.map((p) => [p.role, p.id]));
+
+    const plan = autoSectionPlan(project.videoLimitSec);
+    const sections = await tx
+      .insert(t.sectionPlans)
+      .values(plan.map((s, order) => ({ projectId, order, ...s })))
+      .returning();
+
+    const started = new Date(Date.now() - 2 * 86_400_000);
+    const [session] = await tx
+      .insert(t.sessions)
+      .values({
+        projectId,
+        mode: demoSession.mode,
+        startedAt: started,
+        endedAt: new Date(started.getTime() + demoSession.durationMs),
+        recordingUrl: "demo/rehearsal-1.webm",
+        summary: { score: 72, modelCostUsd: 0 },
+        rubricHeatmap: demoRubricHeatmap,
+      })
+      .returning();
+    if (!session) throw new Error("Demo session could not be created.");
+
+    const segments = await tx
+      .insert(t.transcriptSegments)
+      .values(demoSession.transcript.map((text, i) => ({ projectId, sessionId: session.id, startMs: 12_000 + i * 15_000, endMs: 12_000 + i * 15_000 + 4_000, speaker: "presenter", text, words: [] })))
+      .returning();
+    for (const [i, c] of demoSession.claims.entries()) {
+      const segment = segments[i];
+      const [claim] = await tx
+        .insert(t.claims)
+        .values({
+          projectId,
+          sessionId: session.id,
+          segmentId: segment?.id ?? null,
+          text: segment?.text ?? "",
+          type: c.type,
+          status: c.status,
+          confidence: c.status === "unverified" ? 0.4 : 0.9,
+          suggestedRewrite: c.rewrite,
+        })
+        .returning();
+      if (claim) await tx.insert(t.evidence).values({ projectId, claimId: claim.id, kind: c.evidence.kind, ref: { value: c.evidence.ref }, summary: c.evidence.summary });
     }
-    await tx`INSERT INTO fix_tasks (project_id, title, evidence) VALUES (${projectId}, 'Add an evaluation result for the 92% accuracy claim', 'No evaluation file attached to the claim')`;
-    await tx`INSERT INTO fix_tasks (project_id, title, evidence) VALUES (${projectId}, 'Show offline mode or remove the claim', 'Feature was not shown in the demo section')`;
-    await tx`INSERT INTO personas (project_id, name, is_fictional, criteria, question_style) VALUES (${projectId}, 'Technical', true, ${tx.json(["Technical execution"])}, 'Ask for implementation and evaluation evidence'), (${projectId}, 'Impact and domain', true, ${tx.json(["Real-world impact"])}, 'Ask about users and measured outcomes'), (${projectId}, 'Product and business', true, ${tx.json(["User experience", "Originality"])}, 'Ask about adoption and workflow fit')`;
-    const steps = ["Open report inbox", "Select field report", "Generate response plan", "Compare incident history", "Review follow-up checklist"].map((name, index) => ({ name, maxDurationSeconds: [10, 8, 15, 10, 8][index], fallbackStartSeconds: index * 12, fallbackEndSeconds: index * 12 + 8, expectedState: `screen-${index + 1}` }));
-    await tx`INSERT INTO step_maps (project_id, steps) VALUES (${projectId}, ${tx.json(steps)})`;
-    await tx`INSERT INTO coach_notes (project_id, resolved, still_open, new_items, next_plan) VALUES (${projectId}, ${tx.json(["Problem statement now names the responder"])}, ${tx.json(["Support the accuracy claim with an evaluation"])}, ${tx.json(["Offline mode was claimed but not demonstrated"])}, ${tx.json(["Show the offline flow", "Add classifier evaluation evidence", "Drill the impact question"])})`;
+    await tx.insert(t.latencySamples).values(
+      demoSession.latency.map(([stepKey, durationMs], i) => ({
+        projectId,
+        sessionId: session.id,
+        stepKey,
+        startMs: 40_000 + i * 20_000,
+        endMs: 40_000 + i * 20_000 + durationMs,
+        durationMs,
+        detector: "fixture",
+      })),
+    );
+    await tx.insert(t.judgeTurns).values(
+      demoSession.judgeTurns.map((j) => ({
+        projectId,
+        sessionId: session.id,
+        personaId: personaByRole.get(j.role) ?? null,
+        atMs: j.atMs,
+        kind: "question" as const,
+        text: j.text,
+        trigger: j.trigger,
+      })),
+    );
+
+    // Twelve fixture takes, two per section, transcribed and scored like recorded ones.
+    const facts = await loadAuditFacts(tx, projectId);
+    const scoring = {
+      criteria: criteriaRows.map((c) => ({ id: c.id, name: c.name, description: c.description })),
+      latency: demoSession.latency.map(([stepKey, durationMs], i) => ({ stepKey, startMs: 40_000 + i * 20_000, durationMs })),
+      ...facts,
+      weights: takeWeightsFrom(process.env.TAKE_SCORE_WEIGHTS),
+    };
+    const candidates = [];
+    for (const section of sections) {
+      for (const [i, durationMs] of demoTakes[section.key].entries()) {
+        const text = demoTakeScripts[section.key][i] ?? "";
+        const words = spreadWords(text, durationMs);
+        const [take] = await tx
+          .insert(t.takes)
+          .values({ projectId, sectionPlanId: section.id, sessionId: session.id, mediaUrl: `demo/${section.key}-${i + 1}.webm`, durationMs, transcript: { text, words }, status: "ready" })
+          .returning();
+        if (!take) continue;
+        const { contradictedClaims, ...score } = scoreTranscribedTake({ text, words, durationMs, budgetSec: section.budgetSec }, scoring);
+        await tx.insert(t.takeScores).values({ projectId, takeId: take.id, ...score, breakdown: { ...score.breakdown, contradictedClaims } });
+        candidates.push({ id: take.id, sectionKey: section.key, durationMs, score: score.total, valid: true });
+      }
+    }
+    await tx.insert(t.edls).values({ projectId, items: buildAutoEdl(sections, candidates, project.videoLimitSec).items });
+
+    const steps = [...new Set(scoring.latency.map((l) => l.stepKey))];
+    const bank = heuristicQuestionBank({
+      projectName: DEMO_PROJECT_NAME,
+      criteria: demoEventSpec.criteria,
+      claims: demoSession.claims.map((c, i) => ({ text: segments[i]?.text ?? "", type: c.type, status: c.status, evidence: c.evidence.summary })),
+      findings: demoRepo.findings.map((f) => ({ kind: f.kind, summary: f.summary, ref: f.line ? `${f.filePath}:${f.line}` : f.filePath })),
+      personas: demoPersonas.map((p) => ({ role: p.role, questionStyle: p.questionStyle })),
+      weakSpots: [],
+      latency: steps.map((stepKey) => ({ stepKey, ...latencySummary(scoring.latency.filter((l) => l.stepKey === stepKey).map((l) => l.durationMs)) })),
+    });
+    for (const q of bank) {
+      const [question] = await tx
+        .insert(t.questions)
+        .values({ projectId, text: q.text, personaId: q.personaRole ? (personaByRole.get(q.personaRole) ?? null) : null, likelihood: q.likelihood, damage: q.damage, sourceRefs: q.sourceRefs })
+        .returning();
+      if (question) await tx.insert(t.answerCards).values({ projectId, questionId: question.id, ...q.card });
+    }
+
+    const [stepMap] = await tx.insert(t.stepMaps).values({ projectId, goldenRunSessionId: session.id, fallbackClipUrl: DEMO_FALLBACK_CLIP }).returning();
+    if (stepMap) await tx.insert(t.steps).values(demoSteps.map((s, order) => ({ projectId, stepMapId: stepMap.id, order, ...s })));
+
+    await tx.insert(t.fixTasks).values([
+      {
+        projectId,
+        title: "Add an evaluation result for the 92% accuracy claim",
+        detail: "No eval file or result supports the number.",
+        origin: "claim",
+        suggestedArtifact: "eval/classifier_accuracy.py",
+      },
+      { projectId, title: "Show offline mode or remove the claim", detail: "Offline mode was mentioned but never shown in the demo section.", origin: "claim" },
+      { projectId, title: "Reach the response plan reveal before 60 s", detail: "Past winners showed their strongest moment within the first minute.", origin: "pattern" },
+    ]);
+    await tx.insert(t.coachNotes).values({
+      projectId,
+      sessionId: session.id,
+      resolved: [{ key: "criterion:problem-statement", text: "Problem statement now names the responder", severity: "medium" }],
+      open: [{ key: "claim:the summary is instant", text: 'Fix the contradicted claim "The summary is instant": it took 9.2 s.', severity: "high" }],
+      newIssues: [{ key: "pace:hook", text: "The hook runs long before the first demo moment", severity: "medium" }],
+      nextPlan: ["Show the offline flow or cut the line", "Add classifier evaluation evidence", "Drill the impact question"],
+    });
+
+    return projectId;
   });
-  console.log("Demo Mode project seeded.");
-} finally {
-  await sql.end();
+}
+
+const isMain = import.meta.url === `file://${process.argv[1]}`;
+if (isMain) {
+  loadRootEnv();
+  const env = parseEnv("db", DbEnv);
+  const db = createDb(env.DATABASE_URL, { max: 1 });
+  try {
+    const user = await ensureDevUser(db);
+    const projectId = await seedDemoProject(db, user.id);
+    console.info(`Demo Mode project seeded (${projectId}) with personas: ${Object.values(PERSONA_ROLE_LABEL).join(", ")}.`);
+  } finally {
+    await db.close();
+  }
 }

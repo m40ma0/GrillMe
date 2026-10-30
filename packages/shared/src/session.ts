@@ -1,0 +1,66 @@
+import { z } from "zod";
+import { SessionMode } from "./ws";
+
+export const CreateSessionBody = z.object({
+  mode: SessionMode,
+  difficulty: z.number().int().min(1).max(5).default(3),
+  drillSection: z.enum(["hook", "problem", "demo", "how", "impact", "close"]).optional(),
+  /** Every recording starts with a consent checkbox per session. */
+  consent: z.literal(true, { errorMap: () => ({ message: "Confirm consent to record this session." }) }),
+});
+export type CreateSessionBody = z.infer<typeof CreateSessionBody>;
+
+export const CreateSessionResponse = z.object({ sessionId: z.string().uuid(), wsUrl: z.string(), wsToken: z.string() });
+export type CreateSessionResponse = z.infer<typeof CreateSessionResponse>;
+
+export const SessionTokenClaims = z.object({ sid: z.string().uuid(), pid: z.string().uuid(), uid: z.string().uuid() });
+export type SessionTokenClaims = z.infer<typeof SessionTokenClaims>;
+
+/** WebSocket tokens expire after 15 minutes and are scoped to one session. */
+export const SESSION_TOKEN_TTL_SEC = 15 * 60;
+
+/** Interruptions: at most one per judge per 45 s, only at sentence boundaries. */
+export const JUDGE_COOLDOWN_MS = 45_000;
+/** A judge yields when the presenter talks over it for this long, or says "let me finish". */
+export const TALK_OVER_YIELD_MS = 1_500;
+
+export interface SessionSummary {
+  score: number;
+  durationMs: number;
+  claims: Record<"verified" | "contradicted" | "unverified" | "not_shown", number>;
+  interruptions: number;
+  latency: { stepKey: string; n: number; p50: number | null; p95: number | null }[];
+  modelCostUsd: number | null;
+  modelCalls: number;
+  stt: string;
+  flags?: AuditFlag[];
+}
+
+/** One weak spot in Rehearsal Memory. `key` is stable across sessions so items can be diffed. */
+export const CoachItem = z.object({ key: z.string(), text: z.string().max(240), severity: z.enum(["high", "medium", "low"]) });
+export type CoachItem = z.infer<typeof CoachItem>;
+
+export const CoachNotesOutput = z.object({
+  resolved: z.array(CoachItem),
+  open: z.array(CoachItem),
+  newIssues: z.array(CoachItem),
+  nextPlan: z.array(z.string().max(200)).length(3),
+});
+export type CoachNotesOutput = z.infer<typeof CoachNotesOutput>;
+
+/** Auditor flags that are not claims, shown in the session review and fed to Coach Notes. */
+export const AuditFlag = z.object({ kind: z.enum(["canned_response", "cross_source", "show_or_strike"]), detail: z.string(), refs: z.array(z.string()) });
+export type AuditFlag = z.infer<typeof AuditFlag>;
+
+/** Latency budget drawn as the reference line until DemoGuard step maps set one per step. */
+export const DEFAULT_STEP_BUDGET_MS = 2_000;
+
+/** Coach Notes written before M3 stored plain strings; read both shapes. */
+export function toCoachItems(items: unknown): CoachItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((item) => {
+    if (typeof item === "string") return [{ key: `text:${item.toLowerCase()}`, text: item, severity: "medium" as const }];
+    const parsed = CoachItem.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
