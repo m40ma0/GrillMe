@@ -116,13 +116,16 @@ export async function render(payload: RenderPayload, ctx: JobContext) {
     const mp4 = await ctx.storage.presignPut(`${prefix}/video.mp4`, "video/mp4");
     const thumbnail = await ctx.storage.presignPut(`${prefix}/thumbnail.png`, "image/png");
 
+    // Muse Image paints the card background; the title text is drawn by the renderer, so names stay exact.
+    const background = await cardArtwork(ctx, project, prefix);
+
     await ctx.progress({ pct: 5, step: "Sending the edit to the renderer" });
     const vision = visionClient(ctx.env);
     let status = await vision.startRender({
       clips,
       captions,
-      intro: { title: project.name, subtitle: project.tagline },
-      outro: { title: "Thank you", subtitle: project.name },
+      intro: { title: project.name, subtitle: project.tagline, ...(background ? { background } : {}) },
+      outro: { title: "Thank you", subtitle: project.name, ...(background ? { background } : {}) },
       crossfadeMs: CROSSFADE_MS,
       cardMs: CARD_MS.intro,
       preset: ctx.env.FFMPEG_PRESET,
@@ -150,3 +153,20 @@ export async function render(payload: RenderPayload, ctx: JobContext) {
 }
 
 const formatClock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
+
+/** One abstract background for the intro and outro cards from Muse Image, or null (Demo Mode, no MODEL_IMAGE, or a failed call). */
+async function cardArtwork(ctx: JobContext, project: { id: string; name: string; tagline: string }, prefix: string): Promise<string | null> {
+  const ai = await ctx.aiFor(project.id);
+  if (!ai.image) return null;
+  await ctx.progress({ pct: 3, step: "Generating title card artwork" });
+  try {
+    const bytes = await ai.image.generate({
+      prompt: `Abstract, minimal 16:9 background artwork for the title card of a product demo video. Theme: ${project.tagline || project.name}. Dark, calm, soft gradients with subtle shapes. No text, no letters, no logos, no people.`,
+    });
+    const uri = await ctx.storage.put(`${prefix}/card-art`, bytes, bytes[0] === 0x89 ? "image/png" : "image/jpeg");
+    return await ctx.storage.presignGet(uri, 3600);
+  } catch (error) {
+    ctx.logger.warn({ err: error }, "card artwork failed; using plain title cards");
+    return null;
+  }
+}

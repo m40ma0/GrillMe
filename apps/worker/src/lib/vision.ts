@@ -17,8 +17,8 @@ export type RenderStatus = z.infer<typeof RenderStatus>;
 export interface RenderRequest {
   clips: { source: string; inMs: number; outMs: number; chapter: string; transition: "crossfade" | "cut" }[];
   captions: { startMs: number; endMs: number; text: string }[];
-  intro: { title: string; subtitle: string };
-  outro: { title: string; subtitle: string };
+  intro: { title: string; subtitle: string; background?: string };
+  outro: { title: string; subtitle: string; background?: string };
   crossfadeMs: number;
   cardMs: number;
   preset: string;

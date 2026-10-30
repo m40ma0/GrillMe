@@ -46,7 +46,9 @@ export interface Vision {
 }
 
 export interface ImageGen {
-  generate(input: { prompt: string; width: number; height: number }): Promise<Uint8Array>;
+  readonly modelId: string;
+  /** One image from a text prompt; the bytes as returned (PNG or JPEG). */
+  generate(input: { prompt: string }, options?: { signal?: AbortSignal }): Promise<Uint8Array>;
 }
 
 export interface STT {
@@ -70,3 +72,6 @@ export class AiError extends Error {
     this.name = "AiError";
   }
 }
+
+/** The Meta Model API key, from META_API_KEY or MODEL_API_KEY (the name the Meta provider config uses). */
+export const metaApiKey = (config: { META_API_KEY?: string | undefined; MODEL_API_KEY?: string | undefined }) => config.META_API_KEY ?? config.MODEL_API_KEY;

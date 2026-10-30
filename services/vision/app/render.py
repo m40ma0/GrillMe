@@ -57,6 +57,8 @@ class Caption(Camel):
 class Card(Camel):
     title: str
     subtitle: str = ""
+    #: Optional generated artwork (http(s) URL, e.g. from Muse Image). The text is always drawn here.
+    background: str | None = None
 
 
 class Outputs(Camel):
@@ -120,8 +122,19 @@ def probe_duration_ms(path: Path) -> int:
     return round(float(out.stdout.strip()) * 1000)
 
 
-def card_png(path: Path, title: str, subtitle: str) -> None:
+def card_png(path: Path, title: str, subtitle: str, background: Path | None = None) -> None:
     image = Image.new("RGB", (WIDTH, HEIGHT), (12, 14, 20))
+    if background is not None:
+        try:
+            with Image.open(background) as art:
+                art = art.convert("RGB")
+                # Cover-crop to 16:9, then darken so the title reads on any artwork.
+                scale = max(WIDTH / art.width, HEIGHT / art.height)
+                art = art.resize((max(WIDTH, round(art.width * scale)), max(HEIGHT, round(art.height * scale))))
+                left, top = (art.width - WIDTH) // 2, (art.height - HEIGHT) // 2
+                image = Image.blend(art.crop((left, top, left + WIDTH, top + HEIGHT)), image, 0.55)
+        except OSError:
+            pass  # unreadable artwork: keep the plain card
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, HEIGHT - 12, WIDTH, HEIGHT), fill=(99, 102, 241))
     big, small = font(96), font(44)
@@ -248,8 +261,15 @@ def render(req: RenderRequest, work: Path, report: Callable[[float, str], None])
     parts: list[Path] = []
     steps = len(req.clips) + 5
 
-    card_png(work / "intro.png", req.intro.title, req.intro.subtitle)
-    card_png(work / "outro.png", req.outro.title, req.outro.subtitle)
+    for name, card in (("intro", req.intro), ("outro", req.outro)):
+        art = None
+        if card.background:
+            try:
+                art = work / f"{name}-art"
+                fetch(card.background, art)
+            except Exception:  # noqa: BLE001 - artwork is optional; the plain card is the fallback
+                art = None
+        card_png(work / f"{name}.png", card.title, card.subtitle, art)
     card_clip(work / "intro.png", work / "intro.mkv", req.card_ms, INTERMEDIATE)
     parts.append(work / "intro.mkv")
     report(1 / steps, "Title cards ready")

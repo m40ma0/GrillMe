@@ -131,3 +131,56 @@ describe("DemoGuard session", () => {
     await session.end();
   });
 });
+
+describe("hosted SAM 3.1", () => {
+  it("asks for each UI concept on the Meta Model API and returns normalised regions", async () => {
+    const { HostedSamTracker } = await import("../src/vision/tracker");
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/models/sam-3.1")) return Response.json({ id: "sam-3.1" });
+      const phrase = (JSON.parse(String(init?.body)) as { input: { content: { text?: string }[] }[] }).input[0]?.content[0]?.text;
+      const text = phrase === "error dialog" ? "<0f>0<|box;x1=100;y1=50;x2=220;y2=110;w=320;h=180;c=0.92|><|mask;x=0;y=0;c=0.92;data=60,120,!abc|>" : "";
+      return Response.json({ output_text: text });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const tracker = new HostedSamTracker({ baseUrl: "https://api.meta.ai/v1", apiKey: "k", model: "sam-3.1" });
+    expect(await tracker.probe()).toBe(true);
+    const regions = await tracker.track(screen());
+    expect(regions).toEqual([{ label: "error_dialog", box: [100 / 320, 50 / 180, 220 / 320, 110 / 180], score: 0.92 }]);
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/responses"))).toHaveLength(3);
+    vi.unstubAllGlobals();
+  });
+
+  it("with SAM, DemoGuard switches on a grey dialog the red heuristic cannot see", async () => {
+    const grey = (): Uint8Array => {
+      const data = Buffer.alloc(W * H * 4, 0);
+      for (let i = 0; i < W * H; i++) data.set([150, 150, 150, 255], i * 4);
+      return jpeg.encode({ data, width: W, height: H }, 85).data;
+    };
+    let dialog = false;
+    const tracker = {
+      available: true,
+      probe: async () => true,
+      track: async () => (dialog ? [{ label: "error_dialog" as const, box: [0.3, 0.3, 0.7, 0.6] as [number, number, number, number], score: 0.9 }] : []),
+    };
+    const db = {
+      insert: () => ({ values: () => Promise.resolve() }),
+      select: () => ({ from: () => ({ where: async () => [{ summary: {} }] }) }),
+      update: () => ({ set: () => ({ where: async () => undefined }) }),
+    };
+    const session = new DemoGuardSession(ctx(), { db: db as never, logger: pino({ level: "silent" }), tracker: tracker as never });
+    const out: ServerMessage[] = [];
+    const send = (m: ServerMessage) => out.push(m);
+    session.attach(send);
+    await new Promise((r) => setTimeout(r, 10));
+    await session.event({ type: "demoguard.control", action: "preflight" }, send);
+    await session.event({ type: "demoguard.control", action: "arm" }, send);
+    session.frame(0, hashOf(0), screen());
+    session.frame(250, hashOf(0xff), screen({ panel: true }));
+    await new Promise((r) => setTimeout(r, 10));
+    dialog = true;
+    session.frame(500, hashOf(0xf0f), grey());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(out.filter((m) => m.type === "demoguard.state").at(-1)).toMatchObject({ state: "fallback", vision: "sam" });
+    await session.end();
+  });
+});

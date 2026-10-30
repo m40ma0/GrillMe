@@ -29,7 +29,7 @@ import { ScriptedStt } from "../stt/scripted";
 import { SttUnavailableError, type SttStream } from "../stt/types";
 import { Vad, pcmFromBytes } from "../stt/vad";
 import { VisionWhisperStt } from "../stt/vision";
-import type { VisionTracker } from "../vision/tracker";
+import type { Tracker } from "../vision/tracker";
 import type { SessionContext } from "./context";
 import { persistSession } from "./persist";
 import { asksToFinish, isVagueAnswer, splitSentences } from "./sentences";
@@ -38,7 +38,7 @@ export interface SessionDeps {
   db: Db;
   ai: Ai;
   logger: Logger;
-  tracker: VisionTracker;
+  tracker: Tracker;
   visionUrl: string | undefined;
   visionToken: string | undefined;
   speechModelConfigured: boolean;

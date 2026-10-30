@@ -1,5 +1,5 @@
 import websocket from "@fastify/websocket";
-import { createAi } from "@stage-ready/ai";
+import { createAi, metaApiKey } from "@stage-ready/ai";
 import { RealtimeEnv, loadRootEnv, parseEnv, verifySessionToken } from "@stage-ready/config";
 import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb, projects, sessions as sessionsTable } from "@stage-ready/db";
@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { DemoGuardSession, loadDemoGuardContext, type Sender } from "./demoguard/session";
 import { loadContext } from "./session/context";
 import { LiveSession } from "./session/live-session";
-import { VisionTracker } from "./vision/tracker";
+import { HostedSamTracker, VisionTracker } from "./vision/tracker";
 
 loadRootEnv();
 const env = parseEnv("realtime", RealtimeEnv);
@@ -48,7 +48,12 @@ async function open(sid: string, pid: string): Promise<Entry | null> {
     .innerJoin(projects, eq(projects.id, sessionsTable.projectId))
     .where(eq(sessionsTable.id, sid));
   if (!row) return null;
-  const tracker = new VisionTracker(env.VISION_SERVICE_URL, env.VISION_SERVICE_TOKEN);
+  // Hosted SAM 3.1 when configured; Demo Mode stays on the local service (or hashes) so it is deterministic.
+  const key = metaApiKey(env);
+  const tracker =
+    !row.demoMode && env.MODEL_SAM && key && env.META_API_BASE_URL
+      ? new HostedSamTracker({ baseUrl: env.META_API_BASE_URL, apiKey: key, model: env.MODEL_SAM })
+      : new VisionTracker(env.VISION_SERVICE_URL, env.VISION_SERVICE_TOKEN);
   if (row.mode === "demoguard") {
     const ctx = await loadDemoGuardContext(db, sid, pid, row.demoMode);
     if (!ctx || ctx.ended) return null;
