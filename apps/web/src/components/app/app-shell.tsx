@@ -54,8 +54,8 @@ export function AppShell({ user, projects, defaultOpen, children }: { user: Shel
   const current = projects.find((p) => p.id === projectId) ?? null;
   const currentNav = PROJECT_NAV.flatMap((g) => g.items).find((item) => (item.path === "" ? subpath === "" : subpath.startsWith(item.path)));
 
-  // The DemoGuard cue window runs bare on a second monitor.
-  if (subpath.startsWith("/demoguard/cue")) return <>{children}</>;
+  // The DemoGuard cue window (second monitor) and Stage window (shared in the call) run bare.
+  if (subpath.startsWith("/demoguard/cue") || subpath.startsWith("/demoguard/stage")) return <>{children}</>;
 
   return (
     <SidebarProvider defaultOpen={defaultOpen}>

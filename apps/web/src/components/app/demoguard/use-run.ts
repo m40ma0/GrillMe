@@ -2,7 +2,7 @@
 import { MANUAL_CHECKS, type CreateSessionResponse, type DgPhase, type PreflightCheck, type ServerMessage, type SignalKind } from "@stage-ready/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
-import { cueChannel, startFrameCapture, type CueMessage, type FrameCapture } from "@/lib/demoguard/capture";
+import { cueChannel, startFrameCapture, type CueMessage, type FrameCapture, type StageRequest } from "@/lib/demoguard/capture";
 import { StudioSocket } from "@/lib/studio/socket";
 import type { StepDTO } from "@/lib/types";
 
@@ -76,6 +76,10 @@ export function useDemoGuardRun(projectId: string, steps: StepDTO[]) {
 
   useEffect(() => {
     channel.current = new BroadcastChannel(cueChannel(projectId));
+    // The Stage window's "Test the safety net" arrives here and goes to the server as a test signal.
+    channel.current.onmessage = (e: MessageEvent<CueMessage | StageRequest>) => {
+      if ("type" in e.data && e.data.type === "stage.test") socket.current?.json({ type: "demoguard.test" });
+    };
     return () => channel.current?.close();
   }, [projectId]);
 
@@ -88,9 +92,10 @@ export function useDemoGuardRun(projectId: string, steps: StepDTO[]) {
       next: steps[run.stepIndex + 1] ? { name: steps[run.stepIndex + 1]!.name } : null,
       total: steps.length,
       fallbackSeekMs: run.fallbackSeekMs,
+      badgeVisible: run.badgeVisible,
     };
     channel.current?.postMessage(message);
-  }, [run.phase, run.stepIndex, run.fallbackSeekMs, steps]);
+  }, [run.phase, run.stepIndex, run.fallbackSeekMs, run.badgeVisible, steps]);
 
   const browserChecks = useCallback(
     (connected: boolean, capturing: boolean): PreflightCheck[] => [

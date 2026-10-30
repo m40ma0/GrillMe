@@ -11,6 +11,13 @@ test("DemoGuard: pre-flight gates Arm, an injected error dialog switches within 
   await cue.goto(`${base}/demoguard/cue`, { waitUntil: "networkidle" });
   await expect(cue.getByText("DemoGuard is not armed.")).toBeVisible();
 
+  // The Stage window is what the presenter shares; it plays the golden-run clip on fallback.
+  const stage = await context.newPage();
+  await stage.goto(`${base}/demoguard/stage`, { waitUntil: "networkidle" });
+  await stage.getByLabel("Load fallback clip").setInputFiles(`${__dirname}/.fixtures/golden-run.webm`);
+  await expect(stage.getByText("Fallback clip: golden-run.webm")).toBeVisible();
+  const stageRoot = stage.getByRole("main", { name: "Stage" });
+
   await page.bringToFront();
   await page.getByRole("tab", { name: "Pre-flight" }).click();
   await page.getByRole("combobox", { name: "Demo screen" }).click();
@@ -38,11 +45,19 @@ test("DemoGuard: pre-flight gates Arm, an injected error dialog switches within 
   expect(Number(detected?.match(/(\d+) ms/)?.[1])).toBeLessThan(1_500);
   await expect(page.getByText(/with the Recorded segment badge/)).toBeVisible();
   await expect(cue.getByText("On fallback. Keep narrating this step.")).toBeVisible();
+  // The Stage window has crossfaded to the clip, at the step's in-point, with the badge.
+  await expect(stageRoot).toHaveAttribute("data-state", "fallback", { timeout: 1_500 });
+  await expect(stage.getByRole("status").filter({ hasText: "Recorded segment" })).toBeVisible();
+  const cued = await page.getByText(/The fallback clip is cued to/).textContent();
+  const seekSec = Number(cued?.match(/cued to (\d+(?:\.\d+)?) s/)?.[1] ?? NaN);
+  await expect.poll(() => stage.getByTestId("fallback-clip").evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThanOrEqual(seekSec - 0.3);
+  expect(await stage.getByTestId("fallback-clip").evaluate((v: HTMLVideoElement) => v.currentTime)).toBeLessThan(seekSec + 3);
 
   // The dialog closes at 16 s. Recovery waits for the next step boundary, so the cut back comes when the
   // step's fallback clip ends: exactly one clip length (8 s for this fixture step) on fallback.
   await expect(state).toContainText("Live", { timeout: 20_000 });
   await expect(state).toContainText(/Time on fallback: 8\.\d s/);
+  await expect(stageRoot).toHaveAttribute("data-state", "live");
 
   // Hotkeys.
   await page.keyboard.press("Shift+P");
@@ -54,6 +69,13 @@ test("DemoGuard: pre-flight gates Arm, an injected error dialog switches within 
   await page.keyboard.press("Shift+R");
   await expect(state).toContainText("Live");
   await expectAccessible(page);
+
+  // "Test the safety net" on the Stage window: a fake error dialog and a real switch.
+  await stage.getByRole("button", { name: "Test the safety net" }).click();
+  await expect(state).toContainText("Fallback", { timeout: 5_000 });
+  await expect(page.getByText("Test of the safety net: an injected error dialog.").first()).toBeVisible();
+  await page.keyboard.press("Shift+R");
+  await expect(state).toContainText("Live");
 
   await page.getByRole("button", { name: "End run" }).click();
   await page.getByRole("tab", { name: "Post-mortem" }).click();

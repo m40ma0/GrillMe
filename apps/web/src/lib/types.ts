@@ -239,6 +239,8 @@ export interface StepDTO {
   fallbackInMs: number;
   fallbackOutMs: number;
   hasExpectedState: boolean;
+  /** The golden run's result screen for this step (a small JPEG data URL). */
+  keyframe: string | null;
   goldenDurationMs: number | null;
 }
 

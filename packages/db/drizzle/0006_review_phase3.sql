@@ -1,0 +1,1 @@
+ALTER TABLE "latency_samples" ADD COLUMN "output_frame" text;

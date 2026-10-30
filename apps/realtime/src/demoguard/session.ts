@@ -251,6 +251,11 @@ export class DemoGuardSession {
       case "demoguard.hotkey":
         this.dispatch({ type: "hotkey", action: msg.action, atMs: this.now() });
         return;
+      case "demoguard.test":
+        // The Stage window shows a fake error dialog; this is the signal DemoGuard would have raised for it.
+        // Recovery comes from the real frames, so a test shows a true switch and cut back.
+        this.signal("error_dialog", "Test of the safety net: an injected error dialog.", this.now());
+        return;
       case "signal.network": {
         const atMs = this.now();
         if (msg.status >= 500) this.signal("http_5xx", `${msg.status} from ${msg.url}`, atMs);

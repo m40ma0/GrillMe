@@ -41,6 +41,8 @@ export const ClientMessage = z.discriminatedUnion("type", [
   // M5 additions: the Live control tab runs pre-flight, arms and ends; and sets the Recorded-segment badge.
   z.object({ type: z.literal("demoguard.control"), action: z.enum(["preflight", "arm", "end"]) }),
   z.object({ type: z.literal("demoguard.settings"), badgeVisible: z.boolean() }),
+  // Review phase 3: "Test the safety net" from the Stage window injects an error-dialog signal.
+  z.object({ type: z.literal("demoguard.test") }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 

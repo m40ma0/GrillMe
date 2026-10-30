@@ -8,7 +8,7 @@ export interface SessionRecord {
   endedAt: Date;
   segments: Segment[];
   claims: { localId: string; segmentLocalId: string; text: string; type: ClaimType; status: ClaimStatus; verdict: ClaimVerdict; model?: ModelTag }[];
-  latency: { stepKey: string; startMs: number; endMs: number; durationMs: number; detector: string; inputHash: string | null; outputHash: string | null }[];
+  latency: { stepKey: string; startMs: number; endMs: number; durationMs: number; detector: string; inputHash: string | null; outputHash: string | null; outputFrame: string | null }[];
   turns: { personaId: string; atMs: number; kind: "interrupt" | "question" | "follow_up"; text: string; trigger: string | null; answerSegmentLocalIds: string[]; model?: ModelTag }[];
   fixTasks: { title: string; detail: string; suggestedArtifact: string; origin?: "claim" | "incident" }[];
   summary: SessionSummary;

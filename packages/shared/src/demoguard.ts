@@ -255,6 +255,7 @@ export interface GoldenSample {
   endMs: number;
   durationMs: number;
   outputHash: string | null;
+  outputFrame?: string | null;
 }
 
 export interface DerivedStep {
@@ -264,6 +265,8 @@ export interface DerivedStep {
   fallbackInMs: number;
   fallbackOutMs: number;
   narration: string;
+  /** The golden run's result screen for this step, when it was captured. */
+  expectedKeyframeUrls: string[];
 }
 
 const LEAD_MS = 1_000;
@@ -291,6 +294,7 @@ export function deriveSteps(samples: GoldenSample[], transcript: { startMs: numb
         fallbackInMs: Math.max(0, s.startMs - LEAD_MS),
         fallbackOutMs: s.endMs + TAIL_MS,
         narration: said.join(" ").slice(0, 400),
+        expectedKeyframeUrls: s.outputFrame ? [s.outputFrame] : [],
       };
     });
 }

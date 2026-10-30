@@ -130,6 +130,31 @@ describe("DemoGuard session", () => {
     expect(last()).toMatchObject({ state: "frozen" });
     await session.end();
   });
+
+  it("Test the safety net injects an error-dialog signal, which switches like a real one", async () => {
+    const { session, out, send } = setup();
+    await session.event({ type: "demoguard.control", action: "preflight" }, send);
+    await session.event({ type: "demoguard.control", action: "arm" }, send);
+    session.frame(0, hashOf(0), screen());
+    session.frame(250, hashOf(0xff), screen({ panel: true }));
+    await session.event({ type: "demoguard.test" }, send);
+    expect(out.filter((m) => m.type === "demoguard.state").at(-1)).toMatchObject({ state: "fallback" });
+    expect(out.find((m) => m.type === "demoguard.signal")).toMatchObject({ kind: "error_dialog", critical: true, detail: expect.stringContaining("Test of the safety net") });
+    await session.end();
+  });
+});
+
+describe("golden-run keyframes", async () => {
+  const { thumbnailDataUrl } = await import("../src/session/thumbnail");
+  it("shrinks a frame to a 240 px JPEG data URL, and gives null for an unreadable frame", async () => {
+    const jpeg = (await import("jpeg-js")).default;
+    const big = jpeg.encode({ data: new Uint8Array(960 * 540 * 4).fill(200), width: 960, height: 540 }, 80).data;
+    const url = thumbnailDataUrl(big);
+    expect(url?.startsWith("data:image/jpeg;base64,")).toBe(true);
+    const small = jpeg.decode(Buffer.from(url!.split(",")[1]!, "base64"));
+    expect([small.width, small.height]).toEqual([240, 135]);
+    expect(thumbnailDataUrl(new Uint8Array([1, 2, 3]))).toBeNull();
+  });
 });
 
 describe("hosted SAM 3.1", () => {

@@ -26,4 +26,9 @@ export default function globalSetup() {
       "drawbox=x=20:y=20:w=100:h=20:color=gray:t=fill,drawbox=x=20:y=60:w=280:h=100:color=black:t=fill:enable='gte(t,8)',drawbox=x=100:y=60:w=120:h=60:color=red:t=fill:enable='between(t,12,16)'";
     execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=white:s=320x180:r=10:d=40", "-vf", vf, "-pix_fmt", "yuv420p", guard]);
   }
+  // The golden-run clip the Stage window plays on fallback: 40 s of test pattern with a visible clock.
+  const clip = join(dir, "golden-run.webm");
+  if (!existsSync(clip)) {
+    execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=15:d=40", "-c:v", "libvpx", "-b:v", "300k", "-an", clip]);
+  }
 }

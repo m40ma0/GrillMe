@@ -30,10 +30,10 @@ export async function presignPut(key: string, contentType: string): Promise<{ ur
 }
 
 /** A presigned GET, valid for 15 minutes, for an s3:// URI in this project's bucket. */
-export async function presignGet(uri: string): Promise<string | null> {
+export async function presignGet(uri: string, expiresIn = 900): Promise<string | null> {
   const prefix = `s3://${env().S3_BUCKET}/`;
   if (!uri.startsWith(prefix)) return null;
-  return getSignedUrl(client(), new GetObjectCommand({ Bucket: env().S3_BUCKET, Key: uri.slice(prefix.length) }), { expiresIn: 900 });
+  return getSignedUrl(client(), new GetObjectCommand({ Bucket: env().S3_BUCKET, Key: uri.slice(prefix.length) }), { expiresIn });
 }
 
 export const s3Uri = (key: string) => `s3://${env().S3_BUCKET}/${key}`;

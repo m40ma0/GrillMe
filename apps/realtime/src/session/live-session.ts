@@ -23,6 +23,7 @@ import {
 import { hamming } from "@stage-ready/shared/ws-binary";
 import type { Logger } from "pino";
 import { detectCanned, fineHash } from "../auditor/canned";
+import { thumbnailDataUrl } from "./thumbnail";
 import { Coverage } from "../auditor/coverage";
 import { RECHECK_WINDOW_MS, enforceEvidenceRule, verifyDeterministic, type LatencyRecord } from "../auditor/rules";
 import { Stopwatch, type StopwatchEvent } from "../auditor/stopwatch";
@@ -107,6 +108,8 @@ export class LiveSession {
   private readonly latency: (LatencyRecord & { endMs: number; detector: string; inputHash: string | null; outputHash: string | null })[] = [];
   /** Recent changed frames (the browser skips unchanged ones), for show-or-strike and the canned detector. */
   private readonly frames: { atMs: number; jpeg: Uint8Array }[] = [];
+  /** A thumbnail of each timed step's result screen, aligned with `latency`: the golden run's keyframes. */
+  private readonly outputFrames: (string | null)[] = [];
   private readonly flags: AuditFlag[] = [];
   private demoEndedAtMs: number | null = null;
   private readonly turns: Turn[] = [];
@@ -253,7 +256,7 @@ export class LiveSession {
       endedAt: new Date(),
       segments: this.segments,
       claims: this.ledger.map((c) => ({ localId: c.id, segmentLocalId: c.segmentLocalId, text: c.text, type: c.type, status: c.status, verdict: c.verdict, ...(c.model ? { model: c.model } : {}) })),
-      latency: this.latency.map((l) => ({
+      latency: this.latency.map((l, i) => ({
         stepKey: l.stepKey,
         startMs: Math.round(l.startMs),
         endMs: Math.round(l.endMs),
@@ -261,6 +264,7 @@ export class LiveSession {
         detector: l.detector,
         inputHash: l.inputHash,
         outputHash: l.outputHash,
+        outputFrame: this.outputFrames[i] ?? null,
       })),
       turns: this.turns,
       fixTasks: [...this.fixTasks.values()],
@@ -473,6 +477,7 @@ export class LiveSession {
         const inputHash = before ? fineHash(before.jpeg) : null;
         const outputHash = after ? fineHash(after.jpeg) : null;
         this.latency.push({ stepKey, startMs: e.startMs, endMs: e.endMs, durationMs: e.durationMs, detector: e.detector, inputHash, outputHash });
+        this.outputFrames[this.latency.length - 1] = after ? thumbnailDataUrl(after.jpeg) : null;
         this.checkCanned(stepKey);
         this.send({ type: "latency.step", stepKey, phase: "completed", startMs: e.startMs, durationMs: e.durationMs });
         this.send({ type: "latency.sample", stepKey, durationMs: e.durationMs, detector: e.detector });

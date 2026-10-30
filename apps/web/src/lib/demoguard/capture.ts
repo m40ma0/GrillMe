@@ -71,6 +71,11 @@ export interface CueMessage {
   next: { name: string } | null;
   total: number;
   fallbackSeekMs: number | null;
+  /** Whether the Recorded-segment badge shows during fallback. */
+  badgeVisible: boolean;
 }
+
+/** What the Stage window asks of the Live control window. */
+export type StageRequest = { type: "stage.test" };
 
 export const cueChannel = (projectId: string) => `stage-ready-cue-${projectId}`;

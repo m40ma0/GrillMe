@@ -68,8 +68,8 @@ export function LiveControlTab({ projectId, dg, steps }: { projectId: string; dg
             <AlertTitle>On fallback: {step.name}</AlertTitle>
             <AlertDescription>
               <p>
-                The fallback clip is cued to {sec(run.fallbackSeekMs ?? step.fallbackInMs)} (until {sec(step.fallbackOutMs)}){run.badgeVisible ? ", with the Recorded segment badge" : ""}. Video
-                switching is not part of this build, so keep presenting from the cue window. DemoGuard cuts back to live at the next step boundary once the app recovers.
+                The fallback clip is cued to {sec(run.fallbackSeekMs ?? step.fallbackInMs)} (until {sec(step.fallbackOutMs)}){run.badgeVisible ? ", with the Recorded segment badge" : ""}. The Stage
+                window plays it; keep narrating from the cue window. DemoGuard cuts back to live at the next step boundary once the app recovers.
               </p>
               {lastSwitch?.switchMs != null ? <p>Detected and switched {lastSwitch.switchMs} ms after the frame that showed the failure.</p> : null}
             </AlertDescription>
@@ -132,6 +132,9 @@ export function LiveControlTab({ projectId, dg, steps }: { projectId: string; dg
               <Label htmlFor="dg-badge">Recorded segment badge</Label>
               <Switch id="dg-badge" checked={run.badgeVisible} onCheckedChange={dg.setBadge} disabled={!active} />
             </div>
+            <Button variant="outline" onClick={() => window.open(`/projects/${projectId}/demoguard/stage`, "stage-ready-stage", "popup,width=1280,height=720")}>
+              <ExternalLink /> Open Stage window (share this one)
+            </Button>
             <Button variant="outline" onClick={() => window.open(`/projects/${projectId}/demoguard/cue`, "stage-ready-cue", "popup,width=1280,height=720")}>
               <ExternalLink /> Open cue window
             </Button>

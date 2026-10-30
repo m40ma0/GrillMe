@@ -271,6 +271,8 @@ export const latencySamples = pgTable(
     /** 256-bit dHash (hex) of the screen before the action and of the result; the canned-response detector compares them. */
     inputHash: text(),
     outputHash: text(),
+    /** A 240 px JPEG data URL of the result screen; a golden run's become its steps' keyframes. */
+    outputFrame: text(),
     durationMs: integer().notNull(),
     detector: text().notNull(),
     ...timestamps,

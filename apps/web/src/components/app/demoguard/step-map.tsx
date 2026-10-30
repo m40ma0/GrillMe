@@ -44,9 +44,12 @@ function StepEditor({ step, onSaved }: { step: StepDTO; onSaved: () => void }) {
       <div className="flex items-center justify-between gap-2">
         <span className="text-muted-foreground font-mono text-sm tabular-nums">Step {step.order + 1}</span>
         {step.hasExpectedState ? (
-          <Badge variant="outline">
-            <Fingerprint aria-hidden /> Expected state from the golden run
-          </Badge>
+          <span className="flex items-center gap-2">
+            {step.keyframe ? <img src={step.keyframe} alt={`The golden run's screen after ${step.name}`} className="h-12 w-auto rounded border" /> : null}
+            <Badge variant="outline">
+              <Fingerprint aria-hidden /> Expected state from the golden run
+            </Badge>
+          </span>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
             No expected-state keyframe

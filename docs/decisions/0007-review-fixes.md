@@ -30,3 +30,16 @@ One migration: `0005_review_phase2.sql` (`repos.capabilities_error`, `coach_note
 9. **Progress page.** `loading.tsx` streams a page-shaped skeleton at once (and a general one for every project page) while the server loads the data.
 
 Tests: special tokens, batching and error reasons (worker), the new resolved rule (ai, worker), model-use labels (shared), and e2e: a failed repo digest shows its reason and Retry and survives a reload (`jobs.spec.ts`); a blocked capture leaves no session row (`guest.spec.ts`). The e2e guest server uses its own build folder (`NEXT_DIST_DIR=.next-guest`), since two `next dev` servers sharing `.next` corrupt each other.
+
+## Phase 3 · DemoGuard fallback playback (browser mode)
+
+One migration: `0006_review_phase3.sql` (`latency_samples.output_frame`).
+
+1. **Stage window** (`/projects/:id/demoguard/stage`, opened from Live control). The presenter shares this window in the call instead of the raw app. It shows the demo window (its own screen capture, display only; Live control keeps its 4 fps capture for detection) and follows DemoGuard over the same `BroadcastChannel` as the cue window. On Fallback (or Recovering) it seeks the clip to the step's in-point (`fallbackSeekMs`) and crossfades in 200 ms, with the Recorded-segment badge unless it is turned off; it cuts back when DemoGuard returns to Live at a step boundary. Freeze pauses the live picture. Setup controls hide once armed (they come back on hover or focus).
+2. **The fallback clip** is the golden run's recording: when the project uploads recordings, the step map's `fallback_clip_url` is played from a 6-hour presigned URL; otherwise the presenter loads the local recording file into the Stage window (local recordings never leave the computer). Without a clip, Stage says it is on fallback and to keep narrating.
+3. **Keyframes.** Each timed step in a rehearsal stores a 240 px JPEG of its result screen (`thumbnailDataUrl`, re-encoded with `jpeg-js`); a step map built from a golden run copies them into `steps.expected_keyframe_urls`, and Step map shows them. Expected-state detection still compares perceptual hashes (and SAM regions when hosted SAM is on); Phase 4 adds the model check.
+4. **Narration** already comes from the golden run's transcript around each step (`deriveSteps`); the generic lines the review saw are the seeded Demo Mode step map's.
+5. **OBS** is not built. It is optional in the review and first on its cut list; the companion still logs `obs.switch`.
+6. **Test the safety net** (Stage window, when armed): Stage shows a fake error dialog for 4 s and asks Live control to send `demoguard.test`; realtime raises the same critical `error_dialog` signal a real dialog would ("Test of the safety net: an injected error dialog."), so the switch, the incident and the recovery are all real.
+
+Tests: realtime (the test signal switches like a real dialog; thumbnails), shared (keyframes from the golden run), and `demoguard.spec.ts`: the Stage window, loaded with a test-pattern clip, is on fallback within 1.5 s of the switch with the badge, its clip is at the cued in-point, it is back to live after recovery, and Test the safety net switches.

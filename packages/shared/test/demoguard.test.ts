@@ -110,12 +110,15 @@ describe("step map from a golden run", () => {
     const out = deriveSteps(
       [
         { stepKey: "load_comparison", startMs: 60_000, endMs: 60_640, durationMs: 640, outputHash: null },
-        { stepKey: "generate_summary", startMs: 40_000, endMs: 49_200, durationMs: 9_200, outputHash: "ab" },
+        { stepKey: "generate_summary", startMs: 40_000, endMs: 49_200, durationMs: 9_200, outputHash: "ab", outputFrame: "data:image/jpeg;base64,AAA" },
       ],
       [{ startMs: 38_000, endMs: 41_000, text: "Now I generate the plan." }],
     );
     expect(out.map((s) => s.name)).toEqual(["Generate summary", "Load comparison"]);
     expect(out[0]).toMatchObject({ maxDurationMs: 13_800, fallbackInMs: 39_000, fallbackOutMs: 50_700, narration: "Now I generate the plan.", successSignal: { outputHash: "ab" } });
     expect(out[1]?.maxDurationMs).toBe(3_000);
+    // The golden run's result screen becomes the step's keyframe when it was captured.
+    expect(out[0]?.expectedKeyframeUrls).toEqual(["data:image/jpeg;base64,AAA"]);
+    expect(out[1]?.expectedKeyframeUrls).toEqual([]);
   });
 });
