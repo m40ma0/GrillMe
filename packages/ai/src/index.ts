@@ -1,6 +1,6 @@
 import type { ModelConfig } from "@stage-ready/config";
 import type { Logger } from "pino";
-import { MetaModelAdapter } from "./meta";
+import { MetaModelAdapter, type ReasoningEffort } from "./meta";
 import { MockModelAdapter } from "./mock";
 import { parsePrices } from "./telemetry";
 import { MetaImageAdapter } from "./image";
@@ -53,11 +53,18 @@ export function createAi(config: Partial<ModelConfig> & Pick<ModelConfig, "META_
       models: { spark, wonder: config.MODEL_WONDER ?? spark },
       responseFormat: config.META_RESPONSE_FORMAT,
       api: config.META_API_STYLE ?? "responses",
-      reasoning: { effort: config.META_REASONING_EFFORT ?? "high", summary: config.META_REASONING_SUMMARY ?? "auto", encrypted: config.META_REASONING_ENCRYPTED ?? true },
+      reasoning: { effort: reasoningEffort(config), summary: config.META_REASONING_SUMMARY ?? "auto", encrypted: config.META_REASONING_ENCRYPTED ?? true },
       prices: parsePrices(config.MODEL_PRICES),
     },
     logger,
   );
   const image = config.MODEL_IMAGE ? new MetaImageAdapter({ baseUrl: config.META_API_BASE_URL as string, apiKey, model: config.MODEL_IMAGE }, logger) : null;
   return { llm, image, mode: "meta", reason: null };
+}
+
+/** Spark low and Wonder high unless .env says otherwise; META_REASONING_EFFORT is the older setting for Wonder. */
+export function reasoningEffort(
+  config: Partial<Pick<ModelConfig, "META_REASONING_EFFORT_SPARK" | "META_REASONING_EFFORT_WONDER" | "META_REASONING_EFFORT">>,
+): Record<"spark" | "wonder", ReasoningEffort> {
+  return { spark: config.META_REASONING_EFFORT_SPARK ?? "low", wonder: config.META_REASONING_EFFORT_WONDER ?? config.META_REASONING_EFFORT ?? "high" };
 }

@@ -1,6 +1,7 @@
 import { ModelEnv, loadRootEnv, parseEnv } from "@stage-ready/config";
 import pino from "pino";
 import { MetaImageAdapter } from "./image";
+import { reasoningEffort } from "./index";
 import { MetaModelAdapter } from "./meta";
 import { samSegment } from "./sam";
 import { personaStylesV1 } from "./prompts/personas.v1";
@@ -42,7 +43,7 @@ const adapter = (overrides: Partial<ConstructorParameters<typeof MetaModelAdapte
       models: { spark, wonder },
       responseFormat: env.META_RESPONSE_FORMAT,
       api: env.META_API_STYLE,
-      reasoning: { effort: env.META_REASONING_EFFORT, summary: env.META_REASONING_SUMMARY, encrypted: env.META_REASONING_ENCRYPTED },
+      reasoning: { effort: reasoningEffort(env), summary: env.META_REASONING_SUMMARY, encrypted: env.META_REASONING_ENCRYPTED },
       timeoutMs: 180_000,
       ...overrides,
     },
@@ -50,7 +51,9 @@ const adapter = (overrides: Partial<ConstructorParameters<typeof MetaModelAdapte
   );
 const persona = () => personaStylesV1({ eventName: "Check event", difficulty: 3, criteriaByRole: { technical: ["Technical execution"], impact: ["Impact"], product: ["User experience"] } });
 
-console.info(`Meta Model API check against ${env.META_API_BASE_URL} (${env.META_API_STYLE}, JSON mode ${env.META_RESPONSE_FORMAT})\n`);
+console.info(
+  `Meta Model API check against ${env.META_API_BASE_URL} (${env.META_API_STYLE}, JSON mode ${env.META_RESPONSE_FORMAT}, reasoning: Spark ${reasoningEffort(env).spark}, Wonder ${reasoningEffort(env).wonder})\n`,
+);
 
 try {
   const listed = await adapter().verifyModels();
