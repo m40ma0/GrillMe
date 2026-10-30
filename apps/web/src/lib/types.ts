@@ -169,6 +169,8 @@ export interface TakeDTO {
   /** Fixture takes have no recording to preview. */
   fixture: boolean;
   hasMedia: boolean;
+  /** A frame of the uploaded take, served by /api/takes/:id/thumbnail. */
+  hasThumbnail: boolean;
   score: TakeScoreDTO | null;
 }
 

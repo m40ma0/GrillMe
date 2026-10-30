@@ -26,13 +26,13 @@
     "pdf-lib": "1.17.1",
     "pino": "^9.6.0",
     "tar": "^7.5.22",
+    "tsx": "^4.19.3",
     "vega": "6.4.0",
     "vega-lite": "6.4.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
-    "tsx": "^4.19.3",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }

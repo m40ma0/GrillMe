@@ -162,7 +162,7 @@ flowchart TD
   I --> J["Exports: MP4, SRT, thumbnail, chapters"]
 ```
 
-Status (M4): live. Takes are scored by the worker (`take-process`), the EDL is built in `packages/shared` (`buildAutoEdl`), and the vision service renders it (`POST /render`). Title cards are deterministic (Pillow) until Muse Image is confirmed; see `docs/decisions/0004-m4-decisions.md`.
+Status (M6): live. Takes are transcribed, given a thumbnail (`POST /thumbnail`) and scored by the worker (`take-process`), the EDL is built in `packages/shared` (`buildAutoEdl`), and the vision service renders it (`POST /render`, status mirrored to storage so any instance can answer). Title text is drawn by Pillow over a Muse Image background when `MODEL_IMAGE` is set; see `docs/decisions/0004-m4-decisions.md` and `0006-m6-decisions.md`.
 
 Evidence slides: the `questions` job writes the bank and cards, then renders each slide (Vega-Lite → SVG → PNG with resvg), verifies its numbers with Muse Spark against the `dataSnapshot`, falls back to a deterministic template on any mismatch, and rebuilds the PDF appendix.
 

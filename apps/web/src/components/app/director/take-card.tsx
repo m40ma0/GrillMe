@@ -77,14 +77,18 @@ export function TakeCard({
             className="bg-muted text-muted-foreground relative flex aspect-video w-full flex-col items-center justify-center gap-1 rounded-lg text-xs"
           >
             <span className="sr-only">Take {index + 1} score breakdown:</span>
-            {take.status === "processing" || take.status === "uploaded" ? (
+            {take.hasThumbnail && take.status === "ready" ? (
+              <img src={`/api/takes/${take.id}/thumbnail`} alt="" className="absolute inset-0 h-full w-full rounded-lg object-cover" width={640} height={360} loading="lazy" />
+            ) : take.status === "processing" || take.status === "uploaded" ? (
               <Loader className="animate-spin motion-reduce:animate-none" aria-hidden />
             ) : take.fixture ? (
               <Clapperboard aria-hidden />
             ) : (
               <Film aria-hidden />
             )}
-            <span>{take.status === "processing" || take.status === "uploaded" ? "Transcribing and scoring" : take.fixture ? "Fixture take" : "Recorded take"}</span>
+            <span className={cn(take.hasThumbnail && take.status === "ready" && "sr-only")}>
+              {take.status === "processing" || take.status === "uploaded" ? "Transcribing and scoring" : take.fixture ? "Fixture take" : "Recorded take"}
+            </span>
             <span className="bg-background/80 absolute right-1.5 bottom-1.5 rounded px-1 font-mono tabular-nums">{formatClock(take.durationMs)}</span>
           </button>
         </HoverCardTrigger>

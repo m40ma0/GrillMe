@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, WebEnv, WorkerEnv, openSecret, parseEnv, sealSecret } from "../src";
+import { ConfigError, RealtimeEnv, WebEnv, WorkerEnv, openSecret, parseEnv, sealSecret } from "../src";
 
 const base = {
   DATABASE_URL: "postgres://stage:stage@localhost:5432/stageready",
@@ -28,6 +28,16 @@ describe("env validation", () => {
     expect(() => parseEnv("web", WebEnv, base)).toThrow(/AUTH_GITHUB_ID/);
     expect(parseEnv("web", WebEnv, { ...base, DEV_AUTH_BYPASS: "true" }).DEV_AUTH_BYPASS).toBe(true);
     expect(() => parseEnv("web", WebEnv, { ...base, DEV_AUTH_BYPASS: "true", NODE_ENV: "production" })).toThrow(/production/);
+  });
+  it("refuses placeholder secrets, ws:// and a localhost origin in production only", () => {
+    const prod = { ...base, NODE_ENV: "production", AUTH_GITHUB_ID: "id", AUTH_GITHUB_SECRET: "secret", REALTIME_URL: "wss://rt.example.com" };
+    expect(parseEnv("web", WebEnv, prod).REALTIME_URL).toBe("wss://rt.example.com");
+    expect(() => parseEnv("web", WebEnv, { ...prod, AUTH_SECRET: "replace-with-a-long-random-value" })).toThrow(/placeholder/);
+    expect(() => parseEnv("web", WebEnv, { ...prod, REALTIME_URL: "ws://rt.example.com" })).toThrow(/wss:/);
+    expect(parseEnv("web", WebEnv, { ...base, DEV_AUTH_BYPASS: "true", AUTH_SECRET: "replace-with-a-long-random-value" }).NODE_ENV).toBe("development");
+    expect(() => parseEnv("realtime", RealtimeEnv, { ...prod, REALTIME_JWT_SECRET: "replace-with-a-long-random-value", WEB_ORIGIN: "https://app.example.com" })).toThrow(/REALTIME_JWT_SECRET/);
+    expect(() => parseEnv("realtime", RealtimeEnv, prod)).toThrow(/WEB_ORIGIN/);
+    expect(parseEnv("realtime", RealtimeEnv, { ...prod, WEB_ORIGIN: "https://app.example.com" }).WEB_ORIGIN).toBe("https://app.example.com");
   });
 });
 
