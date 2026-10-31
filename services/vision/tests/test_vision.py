@@ -87,3 +87,11 @@ def test_a_deployed_service_without_a_token_refuses_requests(monkeypatch):
     monkeypatch.delenv("VISION_REQUIRE_TOKEN")
     monkeypatch.delenv("VISION_SERVICE_TOKEN")
     assert client.get("/api/health").status_code == 200
+
+
+def test_the_root_says_what_the_service_is_instead_of_404():
+    from app import main
+
+    reply = TestClient(main.app).get("/")
+    assert reply.status_code == 200
+    assert reply.json()["health"] == "/api/health"

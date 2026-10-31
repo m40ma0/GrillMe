@@ -54,6 +54,12 @@ def check_token(authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid vision service token.")
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    """The service has no page; this says so, instead of a bare 404 that looks like a broken deploy."""
+    return {"service": "stage-ready-vision", "status": "ok", "health": "/api/health", "note": "API only: Stage Ready calls it with VISION_SERVICE_URL and VISION_SERVICE_TOKEN."}
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"service": "vision", "status": "ok", "tracker": "sam" if tracker().available else "none", "stt": "faster-whisper" if _model_error is None else f"error: {_model_error}"}
