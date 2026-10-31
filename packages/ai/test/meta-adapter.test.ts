@@ -205,3 +205,36 @@ describe("reasoning effort per model", () => {
     expect(bodies[1]).toMatchObject({ model: "muse-wonder-1.0", reasoning: { effort: "high", summary: "auto" } });
   });
 });
+
+describe("per-prompt reasoning effort", () => {
+  it("runs claim extraction at minimal effort, whatever the model's default", async () => {
+    const fetchMock = vi.fn(async () => reply(JSON.stringify({ claims: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+    await responsesAdapter().generateObject(prompts.claimExtractV1({ sentence: "It is instant.", segmentStartMs: 0, context: [] }));
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)) as { reasoning?: { effort: string } };
+    expect(body.reasoning?.effort).toBe("minimal");
+  });
+});
+
+describe("claim verification with vision", () => {
+  it("sends the two frames nearest the claim as images and names their times", async () => {
+    const fetchMock = vi.fn(async () => reply(JSON.stringify({ status: "unverified", confidence: 0.3, evidence: [], suggestedRewrite: null })));
+    vi.stubGlobal("fetch", fetchMock);
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 1, 2]);
+    await responsesAdapter().generateObject(
+      prompts.claimVerifyV2({
+        claim: { text: "It is instant.", type: "performance", segmentStartMs: 0, featureName: null, numbers: [] } as never,
+        latency: [],
+        uiStates: [],
+        repoChunks: [],
+        images: [
+          { atMs: 65_000, jpeg },
+          { atMs: 61_000, jpeg },
+        ],
+      }),
+    );
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)) as { input: { content: { type: string; text?: string }[] }[] };
+    expect(body.input[1]?.content.filter((c) => c.type === "input_image")).toHaveLength(2);
+    expect(JSON.stringify(body.input[0])).toContain("image 1 = frame:1:01");
+  });
+});

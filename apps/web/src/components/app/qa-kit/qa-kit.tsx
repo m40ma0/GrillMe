@@ -17,6 +17,7 @@ import { AnswerCardEditor } from "./answer-card-editor";
 import { DrillMode } from "./drill-mode";
 import { SlidePreview } from "./slide-preview";
 import { ModelCaption } from "@/components/app/model-caption";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
@@ -76,6 +77,7 @@ export function QaKit({ projectId, demoMode, initial }: { projectId: string; dem
           onRetry={rebuild}
         />
       ) : null}
+      {data.brief ? <PrePitchBrief brief={data.brief} /> : null}
       {data.gapTasks > 0 ? (
         <Alert>
           <TriangleAlert aria-hidden />
@@ -154,5 +156,40 @@ export function QaKit({ projectId, demoMode, initial }: { projectId: string; dem
       )}
       {drill ? <DrillMode questions={data.questions} demoMode={demoMode} onClose={() => (setDrill(false), void refresh())} /> : null}
     </div>
+  );
+}
+
+/** The one-page brief Muse Wonder writes from everything the project knows, read before presenting. */
+function PrePitchBrief({ brief }: { brief: NonNullable<QaKitDTO["brief"]> }) {
+  const sections: [string, string[]][] = [
+    ["Lean on", brief.strengths],
+    ["Judges will catch", brief.risks],
+    ["Say", brief.mustSay],
+    ["Show", brief.mustShow],
+  ];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Pre-pitch brief</CardTitle>
+        <CardDescription>{brief.summary}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          {sections.map(([title, items]) =>
+            items.length ? (
+              <div key={title}>
+                <h3 className="mb-1 text-sm font-medium">{title}</h3>
+                <ul className="text-muted-foreground list-disc pl-5 text-sm">
+                  {items.map((i) => (
+                    <li key={i}>{i}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null,
+          )}
+        </div>
+        <ModelCaption modelId={brief.model.modelId} latencyMs={brief.model.latencyMs} />
+      </CardContent>
+    </Card>
   );
 }

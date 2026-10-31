@@ -41,14 +41,14 @@ function ctx(): DemoGuardContext {
   };
 }
 
-function setup() {
+function setup(vision?: { describeFrame: (input: { jpeg: Uint8Array; question: string }) => Promise<string> }) {
   const inserted: unknown[] = [];
   const db = {
     insert: () => ({ values: (v: unknown) => (inserted.push(v), Promise.resolve()) }),
     select: () => ({ from: () => ({ where: async () => [{ summary: {} }] }) }),
     update: () => ({ set: () => ({ where: async () => undefined }) }),
   };
-  const session = new DemoGuardSession(ctx(), { db: db as never, logger: pino({ level: "silent" }), tracker: { probe: async () => false, track: async () => null } as never });
+  const session = new DemoGuardSession(ctx(), { db: db as never, logger: pino({ level: "silent" }), tracker: { probe: async () => false, track: async () => null } as never, vision: vision ?? null });
   const out: ServerMessage[] = [];
   const send = (m: ServerMessage) => out.push(m);
   session.attach(send);
@@ -207,5 +207,56 @@ describe("hosted SAM 3.1", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(out.filter((m) => m.type === "demoguard.state").at(-1)).toMatchObject({ state: "fallback", vision: "sam" });
     await session.end();
+  });
+});
+
+describe("expected-state confirmation with Muse Spark", () => {
+  const armed = async (answer: string | Error) => {
+    const asked: string[] = [];
+    const { session, out, send } = setup({
+      describeFrame: async ({ question }) => {
+        asked.push(question);
+        if (answer instanceof Error) throw answer;
+        return answer;
+      },
+    });
+    await session.event({ type: "demoguard.control", action: "preflight" }, send);
+    await session.event({ type: "demoguard.control", action: "arm" }, send);
+    session.frame(0, hashOf(0), screen());
+    session.frame(250, hashOf(0xff), screen({ panel: true }));
+    const any = session as unknown as { confirmMismatch(step: { name: string; narration: string }, jpeg: Uint8Array, stepIndex: number): Promise<void>; state: { stepIndex: number } };
+    return { session, out, any, asked };
+  };
+
+  it("a screen the model says shows the result completes the step (a cosmetic difference)", async () => {
+    const { session, out, any, asked } = await armed("Yes, the response plan is on screen.");
+    await any.confirmMismatch({ name: "Open report inbox", narration: "Here is the inbox." }, new Uint8Array([1]), 0);
+    expect(asked[0]).toContain("Open report inbox");
+    expect(any.state.stepIndex).toBe(1);
+    expect(out.some((m) => m.type === "demoguard.signal" && m.kind === "state_mismatch")).toBe(false);
+    await session.end();
+  });
+
+  it("a no raises the mismatch with the model's reason; a failed call falls back to the hash", async () => {
+    const no = await armed("No, an error banner covers the page.");
+    await no.any.confirmMismatch({ name: "Open report inbox", narration: "" }, new Uint8Array([1]), 0);
+    expect(no.out.find((m) => m.type === "demoguard.signal")).toMatchObject({ kind: "state_mismatch", detail: expect.stringContaining("Muse Spark: an error banner covers the page") });
+    await no.session.end();
+    const failed = await armed(new Error("HTTP 500"));
+    await failed.any.confirmMismatch({ name: "Open report inbox", narration: "" }, new Uint8Array([1]), 0);
+    expect(failed.out.find((m) => m.type === "demoguard.signal")).toMatchObject({ kind: "state_mismatch" });
+    await failed.session.end();
+  });
+});
+
+describe("hosted SAM within the Demo Mode allowance", async () => {
+  const { BudgetedTracker } = await import("../src/vision/tracker");
+  it("tracks while the allowance lasts, then reports nothing", async () => {
+    let left = 1;
+    const inner = { available: true, probe: async () => true, track: async () => [{ label: "spinner" as const, box: [0, 0, 1, 1] as [number, number, number, number], score: 0.9 }] };
+    const tracker = new BudgetedTracker(inner, { allow: async () => left-- > 0 });
+    expect(await tracker.track(new Uint8Array([1]))).toHaveLength(1);
+    expect(await tracker.track(new Uint8Array([1]))).toBeNull();
+    expect(tracker.available).toBe(true);
   });
 });

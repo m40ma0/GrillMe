@@ -1,5 +1,4 @@
 "use client";
-import type { UiRegion } from "@stage-ready/shared";
 import { MonitorPlay } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Label } from "@/components/ui/label";
@@ -8,14 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { useStudio } from "@/stores/studio";
 import { cn } from "@/lib/utils";
 import { clock } from "./types";
-
-const REGION_STYLE: Record<UiRegion["label"], string> = {
-  spinner: "border-status-unverified",
-  progress_bar: "border-status-unverified",
-  error_dialog: "border-status-contradicted",
-  result_region: "border-status-verified",
-};
-const REGION_LABEL: Record<UiRegion["label"], string> = { spinner: "Spinner", progress_bar: "Progress", error_dialog: "Error", result_region: "Result" };
+import { RegionOverlay, trackerLabel } from "../region-overlay";
 
 /** The screen-share preview (nothing ever pops over it), SAM outlines, the section timer and the transcript. */
 export function PreviewPanel({
@@ -56,24 +48,14 @@ export function PreviewPanel({
             <p>Your screen appears here when the rehearsal starts.</p>
           </div>
         )}
-        {overlay
-          ? regions.map((r, i) => (
-              <div
-                key={`${r.label}-${i}`}
-                className={cn("pointer-events-none absolute border-2", REGION_STYLE[r.label])}
-                style={{ left: `${r.box[0] * 100}%`, top: `${r.box[1] * 100}%`, width: `${(r.box[2] - r.box[0]) * 100}%`, height: `${(r.box[3] - r.box[1]) * 100}%` }}
-              >
-                <span className="bg-background/90 absolute -top-5 left-0 rounded px-1 text-[11px]">{REGION_LABEL[r.label]}</span>
-              </div>
-            ))
-          : null}
+        {overlay ? <RegionOverlay regions={regions} /> : null}
       </div>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Switch id="overlay" checked={overlay} onCheckedChange={onOverlay} />
           <Label htmlFor="overlay">UI outlines</Label>
         </div>
-        <span className="text-muted-foreground text-xs">{vision === "sam" ? "SAM 3.1 tracking" : "Screen hashes only (vision service has no SAM)"}</span>
+        <span className="text-muted-foreground text-xs">{trackerLabel(vision)}</span>
       </div>
       <section aria-label="Section timer" className="grid gap-1">
         <div className="bg-muted relative flex h-6 overflow-hidden rounded-md">

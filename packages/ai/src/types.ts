@@ -3,6 +3,9 @@ import type { ZodType, ZodTypeDef } from "zod";
 /** Which configured model a prompt runs on. IDs come from env (MODEL_SPARK, MODEL_WONDER, ...). */
 export type ModelRole = "spark" | "wonder";
 
+/** Reasoning effort on the Responses API; "max" is documented for Muse Spark 1.3 and Muse Wonder. */
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "max";
+
 /**
  * A versioned prompt (packages/ai/prompts/<name>.v<n>.ts). Untrusted content
  * (event pages, winner pages, repo files) only ever appears in `user`, fenced
@@ -15,6 +18,8 @@ export interface Prompt<T> {
   system: string;
   user: string;
   schema: ZodType<T, ZodTypeDef, unknown>;
+  /** Overrides the model's reasoning effort for this prompt (claim extraction runs at minimal, for speed). */
+  effort?: ReasoningEffort;
   /** JPEG frames sent with the user message (vision prompts). */
   images?: Uint8Array[];
   /** Deterministic output used by the mocked adapter in Demo Mode and when no API key is set. */

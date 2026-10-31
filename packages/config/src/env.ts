@@ -35,10 +35,10 @@ export const ModelEnv = z.object({
   META_API_STYLE: z.preprocess(empty, z.enum(["responses", "chat_completions"]).default("responses")),
   /** Reasoning settings for the Responses API. */
   /** Reasoning effort per model: Muse Spark serves live calls (judges, claims), so it defaults low; Muse Wonder does background work, so it defaults high. */
-  META_REASONING_EFFORT_SPARK: z.preprocess(empty, z.enum(["none", "minimal", "low", "medium", "high"]).default("low")),
-  META_REASONING_EFFORT_WONDER: z.preprocess(empty, z.enum(["none", "minimal", "low", "medium", "high"]).optional()),
+  META_REASONING_EFFORT_SPARK: z.preprocess(empty, z.enum(["none", "minimal", "low", "medium", "high", "max"]).default("low")),
+  META_REASONING_EFFORT_WONDER: z.preprocess(empty, z.enum(["none", "minimal", "low", "medium", "high", "max"]).optional()),
   /** Older single setting; used for Muse Wonder when META_REASONING_EFFORT_WONDER is not set. */
-  META_REASONING_EFFORT: z.preprocess(empty, z.enum(["none", "minimal", "low", "medium", "high"]).optional()),
+  META_REASONING_EFFORT: z.preprocess(empty, z.enum(["none", "minimal", "low", "medium", "high", "max"]).optional()),
   META_REASONING_SUMMARY: z.preprocess(empty, z.enum(["auto", "concise", "detailed", "none"]).default("auto")),
   /** Ask for encrypted reasoning so a retry can continue from it without server-side storage. */
   META_REASONING_ENCRYPTED: z.preprocess(empty, bool.default(true)),

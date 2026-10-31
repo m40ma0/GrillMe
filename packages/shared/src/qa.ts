@@ -25,6 +25,20 @@ export type BankQuestion = z.infer<typeof BankQuestion>;
 export const QuestionBank = z.object({ questions: z.array(BankQuestion).min(MIN_QUESTIONS).max(40) });
 export type QuestionBank = z.infer<typeof QuestionBank>;
 
+/** The one-page pre-pitch brief Muse Wonder writes with the question bank, from everything the project knows. */
+export const PrePitchBrief = z.object({
+  summary: z.string().max(800),
+  strengths: z.array(z.string().max(300)).max(5),
+  risks: z.array(z.string().max(300)).max(5),
+  mustSay: z.array(z.string().max(300)).max(5),
+  mustShow: z.array(z.string().max(300)).max(5),
+});
+export type PrePitchBrief = z.infer<typeof PrePitchBrief>;
+
+/** questionBank.v2: the bank and the brief from one long-context call. */
+export const PrePitchBriefBank = QuestionBank.extend({ brief: PrePitchBrief });
+export type PrePitchBriefBank = z.infer<typeof PrePitchBriefBank>;
+
 /** The exact numbers a slide shows, captured when it was rendered. */
 export const SlideSnapshot = z.object({
   title: z.string(),

@@ -94,3 +94,14 @@ describe("createDemoAi", () => {
     expect(createDemoAi({ NODE_ENV: "production" }, { ...mock, reason: "no key" }, mock, new MemoryStore(), logger).mode).toBe("mock");
   });
 });
+
+describe("non-LLM calls in the demo allowance (hosted SAM)", () => {
+  it("takes calls from the same daily count and refuses past the cap", async () => {
+    const store = new MemoryStore();
+    const llm = new BudgetedLLM(liveLlm(0), mockLlm, store, { budgetUsd: 5, maxCalls: 7 }, logger, () => "2026-11-01");
+    expect(await llm.allow(3)).toBe(true);
+    expect(await llm.allow(3)).toBe(true);
+    expect(await llm.allow(3)).toBe(false);
+    expect((await llm.spent()).calls).toBe(6);
+  });
+});

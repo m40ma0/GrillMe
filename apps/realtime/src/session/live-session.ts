@@ -127,6 +127,8 @@ export class LiveSession {
   private currentAnswer: string[] = [];
   private currentAnswerIds: string[] = [];
   private deciding = false;
+  /** A decision was asked for while one was running (new claims landed): decide again when it ends. */
+  private decideAgain = false;
   private manualSections = false;
   private sectionIndex = 0;
   private sectionStartedMs = 0;
@@ -203,8 +205,11 @@ export class LiveSession {
     }
     const handlers = {
       partial: (segment: Segment) => this.onPartial(segment),
+      // Sentences no longer queue behind each other's model calls: each final is handled as it arrives.
       final: (segment: Segment) => {
-        this.pipeline = this.pipeline.then(() => this.onFinal(segment)).catch((error: unknown) => this.deps.logger.error({ err: error }, "sentence pipeline failed"));
+        const done = this.onFinal(segment).catch((error: unknown) => this.deps.logger.error({ err: error }, "sentence pipeline failed"));
+        // Session end still waits for every sentence in flight.
+        this.pipeline = Promise.all([this.pipeline, done]).then(() => undefined);
       },
       error: (error: Error) => {
         this.deps.logger.error({ err: error }, "speech to text error");
@@ -548,6 +553,7 @@ export class LiveSession {
   private async onFinal(raw: Segment) {
     if (this.state === "ended" && this.stt === null) return;
     const received = Date.now();
+    const work: Promise<unknown>[] = [];
     for (const segment of splitSentences(raw)) {
       this.segments.push(segment);
       this.send({ type: "transcript.final", segment });
@@ -558,10 +564,13 @@ export class LiveSession {
         this.currentAnswer.push(segment.text);
         this.currentAnswerIds.push(segment.id);
       }
-      await this.extractClaims(segment, received);
+      work.push(this.extractClaims(segment, received));
     }
-    if (this.state === "live") await this.decide({});
+    // The judge decision starts alongside claim extraction (coverage gaps and earlier claims are known
+    // already); extraction asks for another decision when it adds claims.
+    if (this.state === "live") work.push(this.decide({}));
     this.scheduleAnswerCheck();
+    await Promise.all(work);
   }
 
   private async extractClaims(segment: Segment, received: number) {
@@ -599,15 +608,18 @@ export class LiveSession {
       this.send({ type: "metric", path: "claim_chip", ms: Date.now() - received });
       if (!rule && this.deps.ai.mode === "meta") void this.verifyWithModel(entry);
     }
+    if (extracted.length > 0 && this.state === "live" && this.vad.speechSince === null) await this.decide({});
   }
 
   private async verifyWithModel(entry: LedgerClaim) {
     try {
+      // The two shared-screen frames nearest the claim go to Muse Spark as images.
+      const near = [...this.frames].sort((a, b) => Math.abs(a.atMs - entry.atMs) - Math.abs(b.atMs - entry.atMs)).slice(0, 2);
       const result = await this.deps.ai.llm.generateObject(
-        prompts.claimVerifyV1({
+        prompts.claimVerifyV2({
           claim: entry.claim,
           latency: this.latency.map((l) => ({ stepKey: l.stepKey, durationMs: l.durationMs })),
-          frames: [],
+          images: near,
           uiStates: this.latestRegions,
           repoChunks: (this.ctx.repo?.capabilities ?? []).slice(0, 30).map((c) => ({ ref: c.ref, text: c.summary })),
         }),
@@ -664,8 +676,13 @@ export class LiveSession {
   }
 
   private async decide(opts: { qaTurnDue?: boolean; vagueAnswer?: string | null }) {
-    if (this.deciding || this.judgeSpeaking || (this.state !== "live" && this.state !== "qa")) return;
+    if (this.deciding) {
+      this.decideAgain = true;
+      return;
+    }
+    if (this.judgeSpeaking || (this.state !== "live" && this.state !== "qa")) return;
     this.deciding = true;
+    this.decideAgain = false;
     const started = Date.now();
     try {
       const phase = this.state === "qa" ? "qa" : "pitch";
@@ -717,6 +734,10 @@ export class LiveSession {
       this.deps.logger.warn({ err: error }, "judge decision failed");
     } finally {
       this.deciding = false;
+      if (this.decideAgain && !this.judgeSpeaking) {
+        this.decideAgain = false;
+        void this.decide({});
+      }
     }
   }
 

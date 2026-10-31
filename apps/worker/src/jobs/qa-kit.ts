@@ -1,4 +1,4 @@
-import { buildSlideSnapshot, prompts, type QaContext, type SlideData } from "@stage-ready/ai";
+import { buildSlideSnapshot, prompts, type BriefContext, type SlideData } from "@stage-ready/ai";
 import {
   answerCards,
   claims,
@@ -12,8 +12,10 @@ import {
   projects,
   questions,
   repoFindings,
+  repos,
   sessions,
   slides as slidesTable,
+  winningPatterns,
 } from "@stage-ready/db";
 import { latencySummary, type JobPayload } from "@stage-ready/shared";
 import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
@@ -50,8 +52,29 @@ export async function questionBank(payload: QuestionsPayload, ctx: JobContext) {
   const [project] = await ctx.db.select().from(projects).where(eq(projects.id, payload.projectId));
   if (!project) throw new UserFacingError("Project not found.");
   await ctx.progress({ pct: 5, step: "Collecting criteria, claims, repo findings and past sessions" });
-  const [spec] = await ctx.db.select({ id: eventSpecs.id }).from(eventSpecs).where(eq(eventSpecs.projectId, project.id));
+  const [spec] = await ctx.db.select({ id: eventSpecs.id, name: eventSpecs.name }).from(eventSpecs).where(eq(eventSpecs.projectId, project.id));
   const recent = await recentSessions(ctx, project.id, 3);
+  // The brief reads more: every session's outcome, the winning patterns, the repo and the memory.
+  const [allSessions, patternRows, [repo], memory] = await Promise.all([
+    recentSessions(ctx, project.id, 20),
+    ctx.db.select({ statement: winningPatterns.statement }).from(winningPatterns).where(eq(winningPatterns.projectId, project.id)),
+    ctx.db.select({ readme: repos.readme }).from(repos).where(eq(repos.projectId, project.id)),
+    ctx.db.select().from(coachNotes).where(eq(coachNotes.projectId, project.id)).orderBy(desc(coachNotes.createdAt)).limit(10),
+  ]);
+  const sessionClaims = allSessions.length
+    ? await ctx.db
+        .select({ sessionId: claims.sessionId, text: claims.text, status: claims.status })
+        .from(claims)
+        .where(
+          and(
+            eq(claims.projectId, project.id),
+            inArray(
+              claims.sessionId,
+              allSessions.map((s) => s.id),
+            ),
+          ),
+        )
+    : [];
   const sessionIds = recent.map((s) => s.id);
   const [criteriaRows, claimRows, findingRows, personaRows, notes, latency] = await Promise.all([
     spec ? ctx.db.select().from(criteria).where(eq(criteria.eventSpecId, spec.id)).orderBy(asc(criteria.order)) : Promise.resolve([]),
@@ -68,8 +91,20 @@ export async function questionBank(payload: QuestionsPayload, ctx: JobContext) {
     latencyStats(ctx, project.id),
   ]);
   const seenClaims = new Set<string>();
-  const input: QaContext = {
+  const input: BriefContext = {
     projectName: project.name,
+    eventName: spec?.name || null,
+    winningPatterns: patternRows.map((p) => p.statement),
+    submission: project.submissionText || null,
+    readme: repo?.readme ?? null,
+    repoCapabilities: findingRows.filter((f) => f.kind === "capability").map((f) => ({ ref: findingRef(f), summary: f.summary })),
+    sessions: allSessions.map((s) => ({
+      when: (s.startedAt ?? s.createdAt).toISOString(),
+      score: typeof s.summary?.score === "number" ? s.summary.score : null,
+      contradicted: sessionClaims.filter((c) => c.sessionId === s.id && c.status === "contradicted").map((c) => c.text),
+      notShown: sessionClaims.filter((c) => c.sessionId === s.id && c.status === "not_shown").map((c) => c.text),
+    })),
+    coachNotes: memory.map((n) => ({ when: n.createdAt.toISOString(), open: [...n.open, ...n.newIssues].map((i) => i.text), notRetested: n.notRetested.map((i) => i.text), nextPlan: n.nextPlan })),
     criteria: criteriaRows.map((c) => ({ name: c.name, description: c.description, weight: c.weight })),
     claims: claimRows
       .filter((r) => !seenClaims.has(norm(r.claim.text)) && Boolean(seenClaims.add(norm(r.claim.text))))
@@ -80,9 +115,13 @@ export async function questionBank(payload: QuestionsPayload, ctx: JobContext) {
     latency,
   };
 
-  await ctx.progress({ pct: 20, step: "Ranking likely questions and writing answer cards" });
+  await ctx.progress({ pct: 20, step: "Muse Wonder is reading everything: the brief, likely questions and answer cards" });
   const ai = await ctx.aiFor(project.id);
-  const { value, modelId, latencyMs } = await ai.llm.generateObject(prompts.questionBankV1(input));
+  const { value, modelId, latencyMs } = await ai.llm.generateObject(prompts.questionBankV2(input));
+  await ctx.db
+    .update(projects)
+    .set({ prePitchBrief: { brief: value.brief, modelId, latencyMs: Math.round(latencyMs), createdAt: new Date().toISOString() } })
+    .where(eq(projects.id, project.id));
 
   // Evidence refs must point at data that exists; anything else is dropped, not trusted.
   const known = new Set([

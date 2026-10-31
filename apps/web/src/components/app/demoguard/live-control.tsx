@@ -1,7 +1,7 @@
 "use client";
-import { SIGNAL_LABEL, type DgPhase } from "@stage-ready/shared";
+import { SIGNAL_LABEL, type DgPhase, type UiRegion } from "@stage-ready/shared";
 import { CircleStop, ExternalLink, Pause, Play, Siren } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import type { StepDTO } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import type { useDemoGuardRun } from "./use-run";
+import { RegionOverlay, trackerLabel } from "../region-overlay";
 
 type Run = ReturnType<typeof useDemoGuardRun>;
 
@@ -91,8 +92,10 @@ export function LiveControlTab({ projectId, dg, steps }: { projectId: string; dg
           <CardHeader>
             <CardTitle className="text-base">Signal feed</CardTitle>
             <CardDescription>
-              {run.vision === "sam" ? "Error dialogs and spinners from SAM 3.1." : "SAM 3.1 is not loaded: frame hashes, pixel heuristics and network signals only."} One critical signal, or two
-              different ones within 3 s, switches to fallback.
+              {run.vision === "sam"
+                ? "Error dialogs and spinners from SAM 3.1."
+                : "Basic screen tracking: frame hashes, colour checks and network signals (SAM 3.1 is used on real projects with a Meta key)."}{" "}
+              One critical signal, or two different ones within 3 s, switches to fallback.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -127,6 +130,13 @@ export function LiveControlTab({ projectId, dg, steps }: { projectId: string; dg
           </CardContent>
         </Card>
         <Card>
+          <CardContent className="grid gap-2 pt-6">
+            <p className="text-sm font-medium">Watched screen</p>
+            <WatchedScreen stream={run.stream} regions={run.regions} />
+            <p className="text-muted-foreground text-xs">{run.vision ? trackerLabel(run.vision) : "Starts with pre-flight."}</p>
+          </CardContent>
+        </Card>
+        <Card>
           <CardContent className="grid gap-3 pt-6">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="dg-badge">Recorded segment badge</Label>
@@ -144,6 +154,20 @@ export function LiveControlTab({ projectId, dg, steps }: { projectId: string; dg
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+/** What DemoGuard is watching, with SAM 3.1's boxes when hosted SAM is on. */
+function WatchedScreen({ stream, regions }: { stream: MediaStream | null; regions: UiRegion[] }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.srcObject = stream;
+  }, [stream]);
+  return (
+    <div className={cn("relative aspect-video w-full overflow-hidden rounded-lg border", stream ? "bg-black" : "bg-muted")}>
+      {stream ? <video ref={ref} autoPlay muted playsInline className="h-full w-full object-contain" aria-label="Watched screen preview" /> : null}
+      <RegionOverlay regions={regions} />
     </div>
   );
 }

@@ -14,6 +14,8 @@ test("Q&A Kit: ranked questions, capped scripts, verified slides, drill and the 
   await page.getByRole("button", { name: "Rebuild questions" }).click();
   await expect(page.getByText("Rebuilding questions and slides")).toBeVisible();
   await expect(page.getByText("Numbers verified")).toBeVisible({ timeout: 120_000 });
+  // Muse Wonder writes the pre-pitch brief in the same call (mocked here: e2e runs without a key).
+  await expect(page.getByText("Pre-pitch brief")).toBeVisible();
   await expect(page.getByRole("img", { name: /^Evidence slide:/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "Export PDF" })).toBeVisible();
   await expectAccessible(page);

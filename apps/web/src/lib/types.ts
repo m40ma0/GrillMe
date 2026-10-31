@@ -226,6 +226,8 @@ export interface QaKitDTO {
   questions: QuestionDTO[];
   appendix: boolean;
   gapTasks: number;
+  /** Muse Wonder's pre-pitch brief, written with the question bank. */
+  brief: { summary: string; strengths: string[]; risks: string[]; mustSay: string[]; mustShow: string[]; model: ModelRefDTO; createdAt: string } | null;
 }
 
 // ---------- DemoGuard (F6) ----------

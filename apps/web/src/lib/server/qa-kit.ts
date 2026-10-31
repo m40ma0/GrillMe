@@ -1,5 +1,5 @@
 import "server-only";
-import { answerCards, fixTasks, personas, questions, slides } from "@stage-ready/db";
+import { answerCards, fixTasks, personas, projects, questions, slides } from "@stage-ready/db";
 import type { SlideSnapshot } from "@stage-ready/shared";
 import { and, eq } from "drizzle-orm";
 import type { QaKitDTO } from "@/lib/types";
@@ -35,5 +35,12 @@ export async function loadQaKit(projectId: string): Promise<QaKitDTO> {
       slide: slide ? { id: slide.id, verification: slide.verification, snapshot: slide.dataSnapshot as SlideSnapshot, hasPng: Boolean(slide.pngUrl) } : null,
     }))
     .sort((a, b) => b.likelihood * b.damage - a.likelihood * a.damage);
-  return { questions: list, appendix: rows.some((r) => Boolean(r.slide?.pdfUrl)), gapTasks: gaps.length };
+  const [project] = await db().select({ brief: projects.prePitchBrief }).from(projects).where(eq(projects.id, projectId));
+  const b = project?.brief ?? null;
+  return {
+    questions: list,
+    appendix: rows.some((r) => Boolean(r.slide?.pdfUrl)),
+    gapTasks: gaps.length,
+    brief: b ? { ...b.brief, model: { modelId: b.modelId, latencyMs: b.latencyMs }, createdAt: b.createdAt } : null,
+  };
 }

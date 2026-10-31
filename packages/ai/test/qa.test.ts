@@ -68,3 +68,25 @@ describe("take scoring", () => {
     expect(a.total).toBeGreaterThan(b.total);
   });
 });
+
+describe("pre-pitch brief (questionBank.v2)", () => {
+  it("the deterministic brief and bank pass the schema, cite only what the data holds, and name the risks", () => {
+    const prompt = prompts.questionBankV2({
+      ...ctx,
+      eventName: "Global AI Builder Showcase (fictional)",
+      winningPatterns: ["Show the result within the first minute"],
+      submission: null,
+      readme: null,
+      repoCapabilities: [{ ref: "src/plan.ts:12", summary: "Generates a response plan" }],
+      sessions: [{ when: "2026-11-01T00:00:00Z", score: 61, contradicted: ["The summary is instant."], notShown: [] }],
+      coachNotes: [],
+    });
+    expect(prompt.version).toBe(2);
+    expect(prompt.model).toBe("wonder");
+    const value = prompt.schema.parse(prompt.mock());
+    expect(value.questions.length).toBeGreaterThanOrEqual(20);
+    expect(value.brief.strengths).toContain("Generates a response plan [repo:src/plan.ts:12]");
+    expect(value.brief.mustShow[0]).toBe("Show the result within the first minute");
+    expect(prompt.user).toContain("winning_patterns");
+  });
+});

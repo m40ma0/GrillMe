@@ -12,6 +12,8 @@ export function claimExtractV1(input: { sentence: string; segmentStartMs: number
     id: "claimExtract",
     version: 1,
     model: "spark",
+    // Extraction is quick pattern work on one sentence; minimal reasoning keeps the claim chip under 2 s.
+    effort: "minimal",
     schema: ClaimList,
     system: [
       "Extract factual, checkable claims from this sentence. Ignore opinions and plans.",

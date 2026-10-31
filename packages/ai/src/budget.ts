@@ -41,6 +41,21 @@ export class BudgetedLLM implements LLM {
     return { calls: Number(calls ?? 0), usd: Number(usd ?? 0) };
   }
 
+  /**
+   * Takes `calls` from today's allowance for a non-LLM model call (hosted SAM sends three per frame).
+   * False when the allowance is used up, or the store cannot be read.
+   */
+  async allow(calls: number): Promise<boolean> {
+    try {
+      const spent = await this.spent();
+      if (spent.calls + calls > this.limits.maxCalls || spent.usd >= this.limits.budgetUsd) return false;
+    } catch {
+      return false;
+    }
+    await this.count(`demo-ai:calls:${this.today()}`, calls);
+    return true;
+  }
+
   async generateObject<T>(prompt: Prompt<T>, options: { signal?: AbortSignal } = {}): Promise<GenerateResult<T>> {
     const day = this.today();
     let spent: { calls: number; usd: number };

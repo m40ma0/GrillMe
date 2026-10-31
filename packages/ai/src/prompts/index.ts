@@ -6,6 +6,8 @@ export { personaStylesV1 } from "./personas.v1";
 export { trackRecommendV1 } from "./trackRecommend.v1";
 export { claimExtractV1, ClaimList } from "./claimExtract.v1";
 export { claimVerifyV1, type VerifyContext } from "./claimVerify.v1";
+export { claimVerifyV2 } from "./claimVerify.v2";
+export { heuristicBrief, questionBankV2, type BriefContext } from "./questionBank.v2";
 export { judgeTurnV1, type JudgeCandidate, type JudgeTurnInput, type TurnTrigger } from "./judgeTurn.v1";
 export { showOrStrikeV1, ShowVerdict, type ShowInput } from "./showOrStrike.v1";
 export { coachNotesV1, CoachPlan } from "./coachNotes.v1";

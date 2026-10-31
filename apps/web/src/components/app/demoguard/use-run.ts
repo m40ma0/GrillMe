@@ -1,5 +1,5 @@
 "use client";
-import { MANUAL_CHECKS, type CreateSessionResponse, type DgPhase, type PreflightCheck, type ServerMessage, type SignalKind } from "@stage-ready/shared";
+import { MANUAL_CHECKS, type CreateSessionResponse, type DgPhase, type PreflightCheck, type ServerMessage, type SignalKind, type UiRegion } from "@stage-ready/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
 import { cueChannel, startFrameCapture, type CueMessage, type FrameCapture, type StageRequest } from "@/lib/demoguard/capture";
@@ -43,6 +43,10 @@ export interface RunState {
   incidents: IncidentItem[];
   error: string | null;
   ended: boolean;
+  /** SAM 3.1's latest boxes on the watched screen (hosted SAM only). */
+  regions: UiRegion[];
+  /** The watched screen, for Live control's preview. */
+  stream: MediaStream | null;
 }
 
 const initial: RunState = {
@@ -63,6 +67,8 @@ const initial: RunState = {
   incidents: [],
   error: null,
   ended: false,
+  regions: [],
+  stream: null,
 };
 
 /** One DemoGuard run: the session, its realtime connection, the 4 fps capture, and the cue window feed. */
@@ -153,6 +159,8 @@ export function useDemoGuardRun(projectId: string, steps: StepDTO[]) {
               ...r.incidents,
             ],
           };
+        case "ui.states":
+          return { ...r, regions: m.regions };
         case "session.summary":
           return { ...r, ended: true, connected: false };
         case "error":
@@ -187,7 +195,8 @@ export function useDemoGuardRun(projectId: string, steps: StepDTO[]) {
             sendBrowserChecks(true, false);
           },
         });
-        setRun((r) => ({ ...r, sessionId: created.sessionId, connected: true, capturing: true, ended: false, feed: [], incidents: [] }));
+        const video = capture.current.video;
+        setRun((r) => ({ ...r, sessionId: created.sessionId, connected: true, capturing: true, ended: false, feed: [], incidents: [], stream: video }));
         s.json({ type: "demoguard.control", action: "preflight" });
         sendBrowserChecks(true, true);
       } catch (e) {
@@ -217,7 +226,7 @@ export function useDemoGuardRun(projectId: string, steps: StepDTO[]) {
     socket.current?.json({ type: "demoguard.control", action: "end" });
     capture.current?.stop();
     capture.current = null;
-    setRun((r) => ({ ...r, capturing: false, ended: true }));
+    setRun((r) => ({ ...r, capturing: false, ended: true, stream: null, regions: [] }));
   }, []);
 
   useEffect(

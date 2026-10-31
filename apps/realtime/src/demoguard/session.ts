@@ -21,6 +21,7 @@ import {
 import { hamming } from "@stage-ready/shared/ws-binary";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { Logger } from "pino";
+import type { Vision } from "@stage-ready/ai";
 import { fineHash, hexHamming } from "../auditor/canned";
 import { DEFAULT_STOPWATCH, Stopwatch } from "../auditor/stopwatch";
 import type { Tracker } from "../vision/tracker";
@@ -84,8 +85,13 @@ export interface DemoGuardDeps {
   db: Db;
   logger: Logger;
   tracker: Tracker;
+  /** Muse Spark vision: confirms an expected-state mismatch before it becomes a signal. Absent in Demo Mode. */
+  vision?: Vision | null;
   onEnded?: (projectId: string, sessionId: string) => void;
 }
+
+/** How long the model may take to confirm a mismatch before the perceptual hash decides alone. */
+const CONFIRM_TIMEOUT_MS = 3_000;
 
 /** Frames in DemoGuard are sampled at 4 fps. */
 export const DEMOGUARD_FPS = 4;
@@ -119,6 +125,7 @@ export class DemoGuardSession {
   private visionMode: "sam" | "heuristic" = "heuristic";
   /** Fine hash of the latest frame, only computed when the current step has an expected state. */
   private lastJpegHash: string | null = null;
+  private lastJpeg: Uint8Array | null = null;
 
   constructor(
     readonly ctx: DemoGuardContext,
@@ -281,12 +288,15 @@ export class DemoGuardSession {
     if (phase === "armed" && distance >= DEFAULT_STOPWATCH.minChange) this.dispatch({ type: "activity", atMs });
 
     this.lastJpegHash = this.ctx.steps[this.state.stepIndex]?.expectedHash ? fineHash(jpeg) : null;
+    this.lastJpeg = jpeg;
     const stats = frameStats(jpeg);
     const errorByPixels = stats ? this.red.isError(atMs, stats) : false;
     const blank = stats ? stats.lumaStd < BLANK_STD : false;
     if (blank) this.blankSinceMs ??= atMs;
     else this.blankSinceMs = null;
     const finish = (regions: UiRegion[] | null) => {
+      // Live control draws SAM's boxes over its preview.
+      if (regions) this.broadcast({ type: "ui.states", frameTs, regions, detector: "sam" });
       const samError = regions?.some((r) => r.label === "error_dialog" && r.score >= 0.5) ?? false;
       // SAM catches dialogs of any colour; the red-region heuristic stays on as a backstop.
       const error = samError || errorByPixels;
@@ -324,11 +334,40 @@ export class DemoGuardSession {
       if (this.state.phase !== "live" && this.state.phase !== "suspect") continue;
       const step = this.ctx.steps[this.state.stepIndex];
       if (step?.expectedHash && this.lastJpegHash && hexHamming(this.lastJpegHash, step.expectedHash) > MISMATCH_BITS) {
-        this.signal("state_mismatch", `After ${step.name}, the screen does not match the golden run.`, this.now());
+        if (this.deps.vision && this.lastJpeg) void this.confirmMismatch(step, this.lastJpeg, this.state.stepIndex);
+        else this.signal("state_mismatch", `After ${step.name}, the screen does not match the golden run.`, this.now());
         continue;
       }
       this.dispatch({ type: "step_complete", atMs: this.now() });
     }
+  }
+
+  /**
+   * The hash says the screen differs from the golden run; Muse Spark looks at the frame. A screen that does
+   * show the step's result (a cosmetic difference) completes the step; otherwise the mismatch is raised with
+   * the model's reason. If the model fails or is slow, the hash decides.
+   */
+  private async confirmMismatch(step: { name: string; narration: string }, jpeg: Uint8Array, stepIndex: number) {
+    const question = [
+      `A live product demo just finished the step "${step.name}".`,
+      step.narration ? `In the rehearsal the presenter said: "${step.narration.slice(0, 300)}"` : "",
+      'Does this screenshot show that step\'s result, with no error dialog, spinner or blank screen? Answer "yes" or "no", then one short reason.',
+    ]
+      .filter(Boolean)
+      .join("\n");
+    let answer: string | null = null;
+    try {
+      answer = await Promise.race([this.deps.vision!.describeFrame({ jpeg, question }), new Promise<null>((resolve) => setTimeout(() => resolve(null), CONFIRM_TIMEOUT_MS))]);
+    } catch (error) {
+      this.deps.logger.warn({ err: error }, "expected-state confirmation failed; the hash decides");
+    }
+    if (this.state.stepIndex !== stepIndex) return;
+    if (answer && /^\s*yes\b/i.test(answer)) {
+      this.dispatch({ type: "step_complete", atMs: this.now() });
+      return;
+    }
+    const reason = answer?.replace(/^\s*no\b[\s,.:;-]*/i, "").trim();
+    this.signal("state_mismatch", `After ${step.name}, the screen does not match the golden run${reason ? ` (Muse Spark: ${reason.slice(0, 160)})` : "."}`, this.now());
   }
 
   private signal(kind: SignalKind, detail: string, atMs: number) {

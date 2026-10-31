@@ -2,13 +2,11 @@ import type { Logger } from "pino";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { parseReply } from "./json";
 import { costUsd, traced, type ModelPrices } from "./telemetry";
-import { AiError, type GenerateResult, type LLM, type ModelRole, type Prompt, type Usage, type Vision } from "./types";
+import { AiError, type GenerateResult, type LLM, type ModelRole, type Prompt, type ReasoningEffort, type Usage, type Vision } from "./types";
 
 // Meta Model API adapter, bearer auth. It speaks the Responses API (POST {META_API_BASE_URL}/responses),
 // which the Meta Model API uses, with reasoning; or the older chat-completions protocol
 // (POST {META_API_BASE_URL}/chat/completions). Base URL, key and model IDs come from env only.
-
-export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high";
 
 export interface ReasoningConfig {
   /** Per model role: Spark serves live, latency-sensitive calls; Wonder does background reasoning. */
@@ -102,11 +100,12 @@ export class MetaModelAdapter implements LLM, Vision {
   }
 
   /** One Responses API call. Returns the output text, usage, and the output items to replay on a retry. */
-  private async respond(role: ModelRole, input: InputItem[], format: Record<string, unknown> | undefined, signal?: AbortSignal) {
+  private async respond(role: ModelRole, input: InputItem[], format: Record<string, unknown> | undefined, signal?: AbortSignal, effortOverride?: ReasoningEffort) {
     const model = this.config.models[role];
     const timeout = AbortSignal.timeout(this.config.timeoutMs ?? 300_000);
     const r = this.config.reasoning;
-    const effort = r?.effort[role] ?? "none";
+    // A prompt may ask for less (or more) reasoning than its model's default, e.g. minimal for claim extraction.
+    const effort = effortOverride ?? r?.effort[role] ?? "none";
     const body = JSON.stringify({
       model,
       input,
@@ -218,7 +217,7 @@ export class MetaModelAdapter implements LLM, Vision {
     const started = performance.now();
     const usage: Usage = { inputTokens: 0, outputTokens: 0 };
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const reply = await this.respond(prompt.model, input, this.responsesFormat(prompt as Prompt<unknown>), options.signal);
+      const reply = await this.respond(prompt.model, input, this.responsesFormat(prompt as Prompt<unknown>), options.signal, prompt.effort);
       usage.inputTokens = reply.usage.inputTokens === null ? null : (usage.inputTokens ?? 0) + reply.usage.inputTokens;
       usage.outputTokens = reply.usage.outputTokens === null ? null : (usage.outputTokens ?? 0) + reply.usage.outputTokens;
       const parsed = parseReply(reply.text, prompt.schema);

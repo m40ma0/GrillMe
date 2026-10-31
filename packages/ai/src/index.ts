@@ -1,11 +1,11 @@
 import type { ModelConfig } from "@stage-ready/config";
 import type { Logger } from "pino";
-import { MetaModelAdapter, type ReasoningEffort } from "./meta";
+import { MetaModelAdapter } from "./meta";
 import { MockModelAdapter } from "./mock";
 import { BudgetedLLM, type SpendStore } from "./budget";
 import { parsePrices } from "./telemetry";
 import { MetaImageAdapter } from "./image";
-import { AiError, metaApiKey, type ImageGen, type LLM } from "./types";
+import { AiError, metaApiKey, type ImageGen, type LLM, type ReasoningEffort } from "./types";
 
 export * from "./types";
 export * from "./json";
@@ -13,7 +13,7 @@ export { MetaModelAdapter } from "./meta";
 export { MockModelAdapter } from "./mock";
 export { MetaImageAdapter } from "./image";
 export * as prompts from "./prompts";
-export type { RepoChunk } from "./prompts";
+export type { BriefContext, RepoChunk } from "./prompts";
 export * from "./heuristics";
 export * from "./claims";
 export * from "./coach";

@@ -17,7 +17,8 @@ test("a Demo Mode rehearsal: ledger chips, repo truth, show-or-strike, interrupt
   // "The summary is instant." is said at ~8 s; the fake screen's result takes 9.2 s to appear.
   const instant = ledger.getByRole("row").filter({ hasText: "The summary is instant." });
   await expect(instant).toContainText("Contradicted", { timeout: 40_000 });
-  await expect(page.getByLabel("Latency stopwatch")).toContainText(/9\.\d s|10\.\d s/);
+  // The fake result appears 9.2 s after the action; frames arrive twice a second, so allow half a second either way.
+  await expect(page.getByLabel("Latency stopwatch")).toContainText(/8\.[5-9] s|9\.\d s|10\.\d s/);
 
   // At difficulty 3 the panel interrupts at least twice within three minutes, only at sentence boundaries.
   await expect.poll(() => page.getByLabel("Judge turns").getByText("Interrupt", { exact: true }).count(), { timeout: 150_000 }).toBeGreaterThanOrEqual(2);
@@ -39,7 +40,8 @@ test("a Demo Mode rehearsal: ledger chips, repo truth, show-or-strike, interrupt
   // list at least one resolved item and a three-item next plan.
   await page.getByRole("link", { name: "All sessions" }).click();
   await page.getByRole("table").getByRole("link").first().click();
-  await expect(page.getByRole("heading", { name: "Session review" })).toBeVisible();
+  // The first visit compiles the review page on the dev server.
+  await expect(page.getByRole("heading", { name: "Session review" })).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText("Resolved since last time")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Next session" }).locator("xpath=following-sibling::ol/li")).toHaveCount(3);
   await page.getByRole("tab", { name: "Claims" }).click();

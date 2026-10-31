@@ -1,5 +1,5 @@
 import websocket from "@fastify/websocket";
-import { createAi, createDemoAi, metaApiKey } from "@stage-ready/ai";
+import { BudgetedLLM, MetaModelAdapter, createAi, createDemoAi, metaApiKey } from "@stage-ready/ai";
 import { RealtimeEnv, loadRootEnv, parseEnv, verifySessionToken } from "@stage-ready/config";
 import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb, projects, sessions as sessionsTable } from "@stage-ready/db";
@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { DemoGuardSession, loadDemoGuardContext, type Sender } from "./demoguard/session";
 import { loadContext } from "./session/context";
 import { LiveSession } from "./session/live-session";
-import { HostedSamTracker, VisionTracker } from "./vision/tracker";
+import { BudgetedTracker, HostedSamTracker, VisionTracker } from "./vision/tracker";
 
 loadRootEnv();
 const env = parseEnv("realtime", RealtimeEnv);
@@ -50,16 +50,31 @@ async function open(sid: string, pid: string): Promise<Entry | null> {
     .innerJoin(projects, eq(projects.id, sessionsTable.projectId))
     .where(eq(sessionsTable.id, sid));
   if (!row) return null;
-  // Hosted SAM 3.1 when configured; Demo Mode stays on the local service (or hashes) so it is deterministic.
+  // Hosted SAM 3.1 when configured. Demo Mode rehearsals use it too when Demo Mode runs on the real models,
+  // within the daily allowance; DemoGuard in Demo Mode stays on the local service so its scenario is deterministic.
   const key = metaApiKey(env);
+  const hosted = env.MODEL_SAM && key && env.META_API_BASE_URL ? new HostedSamTracker({ baseUrl: env.META_API_BASE_URL, apiKey: key, model: env.MODEL_SAM }) : null;
   const tracker =
-    !row.demoMode && env.MODEL_SAM && key && env.META_API_BASE_URL
-      ? new HostedSamTracker({ baseUrl: env.META_API_BASE_URL, apiKey: key, model: env.MODEL_SAM })
-      : new VisionTracker(env.VISION_SERVICE_URL, env.VISION_SERVICE_TOKEN);
+    hosted && !row.demoMode
+      ? hosted
+      : hosted && row.mode !== "demoguard" && demo.llm instanceof BudgetedLLM
+        ? new BudgetedTracker(hosted, demo.llm)
+        : new VisionTracker(env.VISION_SERVICE_URL, env.VISION_SERVICE_TOKEN);
   if (row.mode === "demoguard") {
     const ctx = await loadDemoGuardContext(db, sid, pid, row.demoMode);
     if (!ctx || ctx.ended) return null;
-    return { kind: "demoguard", session: new DemoGuardSession(ctx, { db, logger: logger.child({ sessionId: sid, demoguard: true }), tracker, onEnded }), expiry: null };
+    return {
+      kind: "demoguard",
+      session: new DemoGuardSession(ctx, {
+        db,
+        logger: logger.child({ sessionId: sid, demoguard: true }),
+        tracker,
+        // Muse Spark confirms expected-state mismatches on real projects; Demo Mode stays deterministic.
+        vision: !ctx.demoMode && live.llm instanceof MetaModelAdapter ? live.llm : null,
+        onEnded,
+      }),
+      expiry: null,
+    };
   }
   const ctx = await loadContext(db, sid, pid);
   if (!ctx || ctx.ended) return null;

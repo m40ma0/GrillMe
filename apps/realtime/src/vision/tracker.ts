@@ -86,3 +86,25 @@ export class HostedSamTracker implements Tracker {
     }
   }
 }
+
+/**
+ * Hosted SAM inside the Demo Mode allowance: each frame costs three calls (one per phrase) from the daily
+ * demo budget, and past it the tracker reports nothing (the red-region heuristic and hashes still run).
+ */
+export class BudgetedTracker implements Tracker {
+  constructor(
+    private readonly inner: Tracker,
+    private readonly budget: { allow(calls: number): Promise<boolean> },
+    private readonly callsPerFrame = 3,
+  ) {}
+  get available() {
+    return this.inner.available;
+  }
+  probe() {
+    return this.inner.probe();
+  }
+  async track(jpeg: Uint8Array) {
+    if (!(await this.budget.allow(this.callsPerFrame))) return null;
+    return this.inner.track(jpeg);
+  }
+}
