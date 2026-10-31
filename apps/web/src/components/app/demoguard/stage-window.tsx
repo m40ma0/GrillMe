@@ -89,6 +89,7 @@ export function StageWindow({
   const loadClip = (file: File | undefined) => {
     if (!file) return;
     setClipReady(false);
+    setError(null);
     setClipUrl(URL.createObjectURL(file));
     setClipName(file.name);
   };

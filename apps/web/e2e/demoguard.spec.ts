@@ -15,7 +15,8 @@ test("DemoGuard: pre-flight gates Arm, an injected error dialog switches within 
   const stage = await context.newPage();
   await stage.goto(`${base}/demoguard/stage`, { waitUntil: "networkidle" });
   await stage.getByLabel("Load fallback clip").setInputFiles(`${__dirname}/.fixtures/golden-run.webm`);
-  await expect(stage.getByText("Fallback clip: golden-run.webm")).toBeVisible();
+  await expect(stage.getByText("· golden-run.webm")).toBeVisible();
+  await expect(stage.getByTestId("fallback-clip-status")).toHaveText("ready");
   const stageRoot = stage.getByRole("main", { name: "Stage" });
 
   await page.bringToFront();
