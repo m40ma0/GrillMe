@@ -22,6 +22,7 @@ export * from "./rules";
 export * from "./takes";
 export * from "./qa";
 export * from "./sam";
+export * from "./voice";
 export * from "./telemetry";
 export { BudgetedLLM, type DemoLimits, type SpendStore } from "./budget";
 
@@ -66,8 +67,8 @@ export function createAi(config: Partial<ModelConfig> & Pick<ModelConfig, "META_
 
 /**
  * The adapter for Demo Mode projects: the real models within the daily allowance (DEMO_LIVE_MODELS,
- * DEMO_DAILY_BUDGET_USD, DEMO_DAILY_CALL_LIMIT), else the mocks. Generated title-card art stays off in
- * Demo Mode, so renders of the fixture takes are reproducible.
+ * DEMO_DAILY_BUDGET_USD, DEMO_DAILY_CALL_LIMIT), else the mocks. Muse Image is on too: the worker caches
+ * Demo Mode artwork under one shared key, so it is generated once ($0.01) and every guest sees the same art.
  */
 export function createDemoAi(
   config: Partial<Pick<ModelConfig, "DEMO_LIVE_MODELS" | "DEMO_DAILY_BUDGET_USD" | "DEMO_DAILY_CALL_LIMIT">> & { NODE_ENV?: string },
@@ -80,7 +81,7 @@ export function createDemoAi(
   if (!enabled) return mock;
   if (live.mode !== "meta") return { ...mock, reason: live.reason };
   const llm = new BudgetedLLM(live.llm, mock.llm, store, { budgetUsd: config.DEMO_DAILY_BUDGET_USD ?? 5, maxCalls: config.DEMO_DAILY_CALL_LIMIT ?? 1500 }, logger);
-  return { llm, image: null, mode: "meta", reason: null };
+  return { llm, image: live.image, mode: "meta", reason: null };
 }
 
 /** Spark low and Wonder high unless .env says otherwise; META_REASONING_EFFORT is the older setting for Wonder. */

@@ -173,19 +173,27 @@ What to know:
    modal deploy deploy/modal/stage_ready.py
    ```
 
-6. **Check.** Open `APP_URL/api/health` (the first visit wakes the container: allow a minute). In the Modal dashboard, the `stage-ready` app's logs show `Migrations applied.`, `router on :7860`, realtime `Server listening` and `worker listening on queue stage-ready-jobs` with `"models":"meta"`. Then sign in at `APP_URL` and run a short rehearsal.
+6. **Check.** Run `pnpm env:check <your secret as a dotenv file> --strict` before deploying: it names any field that is missing, malformed or still a placeholder (never the values). After deploying, `APP_URL/healthz` reports web, realtime and storage together (503 with `"reason":"credentials"` means the S3 keys are wrong). Open `APP_URL/api/health` (the first visit wakes the container: allow a minute). In the Modal dashboard, the `stage-ready` app's logs show `Migrations applied.`, `router on :7860`, realtime `Server listening` and `worker listening on queue stage-ready-jobs` with `"models":"meta"`. Then sign in at `APP_URL` and run a short rehearsal.
 
 To update: `git pull`, then deploy again.
 
 Visitors can try it without signing in: **Try Demo Mode** creates a guest workspace (24 hours) with the fictional project, running on the real Meta models until today's demo allowance (`DEMO_DAILY_BUDGET_USD`, tracked only for models priced in `MODEL_PRICES`, and `DEMO_DAILY_CALL_LIMIT`) is used up; after that Demo Mode answers with the mocks and each caption says so. Set `DEMO_LIVE_MODELS=false` to keep Demo Mode mocked.
 
-To avoid the cold start while judges are looking (it uses credits while idle), deploy with:
+The container stays warm by default (one running at all times, no cold start while judges are looking; it uses credits while idle). Once judging ends, let it scale to zero:
 
 ```bash
-KEEP_WARM=1 modal deploy deploy/modal/stage_ready.py
+KEEP_WARM=0 modal deploy deploy/modal/stage_ready.py
 ```
 
-Deploy again without it afterwards.
+**Run next to the database.** Each page makes several Postgres round trips, so a container in a different region from Postgres turns every page into seconds. Set `MODAL_REGION` at deploy time to the Modal region nearest your database host (for example `us-east` for Neon `aws-us-east-1`/`us-east-2`, `eu-west` for `aws-eu-central-1`, `ap-southeast` for `aws-ap-southeast-1`), or move the database next to the container:
+
+```bash
+MODAL_REGION=us-east modal deploy deploy/modal/stage_ready.py
+```
+
+Region pinning can carry a price multiplier on Modal. Check with `curl -w '%{time_total}\n' -o /dev/null -s APP_URL/api/projects` (signed in) that project calls come back in well under half a second.
+
+Guest workspaces expire after 48 hours. Remove expired guests and review-test projects with `DATABASE_URL=… pnpm db:cleanup` (add `--dry-run` to count first).
 
 The same container also runs on any Docker host with `deploy/container/Dockerfile` (settings as environment variables, port 7860).
 

@@ -58,7 +58,7 @@ export function route<P extends Record<string, string> = Record<string, never>>(
       const user = await getCurrentUser();
       if (!user) throw new ApiError(401, "unauthenticated", "Sign in to continue.");
       if (user.guest && options.guests !== undefined) throw guestForbidden(options.guests || "do this");
-      if (options.rateLimit && !rateLimit(`${user.id}:${new URL(req.url).pathname}`, options.rateLimit.limit, options.rateLimit.windowMs)) {
+      if (options.rateLimit && !(await rateLimit(`${user.id}:${new URL(req.url).pathname}`, options.rateLimit.limit, options.rateLimit.windowMs))) {
         throw new ApiError(429, "rate_limited", "Too many requests. Wait a minute and try again.");
       }
       return await handler(req, { user, params: await context.params });

@@ -10,7 +10,8 @@
   "scripts": {
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "env:check": "tsx src/check.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.10.0",
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^22.13.10",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "tsx": "^4.19.3"
   }
 }

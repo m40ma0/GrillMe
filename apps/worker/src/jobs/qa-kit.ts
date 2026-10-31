@@ -20,6 +20,7 @@ import {
 import { latencySummary, type JobPayload } from "@stage-ready/shared";
 import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { UserFacingError, type JobContext } from "../lib/context";
+import { cachedArtwork, modelName } from "../lib/artwork";
 import { renderVerifiedSlide, slidesPdf } from "../lib/slides";
 
 type QuestionsPayload = Extract<JobPayload, { name: "questions" }>;
@@ -224,6 +225,15 @@ export async function renderSlides(payload: SlidesPayload, ctx: JobContext, opti
   };
 
   const ai = await ctx.aiFor(project.id);
+  // Muse Image paints the deck background once (shared by every Demo Mode project); numbers are still drawn by the renderer.
+  await ctx.progress({ pct: from, step: "Painting the slide background with Muse Image" });
+  const artwork = await cachedArtwork(
+    ctx,
+    ai,
+    project.demoMode ? "demo/slides/muse-background" : `projects/${project.id}/slides/muse-background`,
+    `Abstract, minimal 16:9 background for presentation slides about ${project.tagline || project.name}. Very dark navy, soft indigo light, calm gradients and subtle geometric shapes, lots of empty space. No text, no letters, no numbers, no logos, no people.`,
+  );
+  const art = artwork ? { dataUrl: `data:${artwork.mime};base64,${Buffer.from(artwork.bytes).toString("base64")}`, caption: `Image: ${modelName(artwork.modelId)}` } : null;
   const results = { passed: 0, fallback: 0 };
   for (const [i, { card, question }] of cards.entries()) {
     await ctx.progress({ pct: Math.round(from + ((100 - from) * 0.9 * i) / Math.max(1, cards.length)), step: `Rendering slide ${i + 1} of ${cards.length}` });
@@ -231,6 +241,7 @@ export async function renderSlides(payload: SlidesPayload, ctx: JobContext, opti
     const { png, verification, missing, error } = await renderVerifiedSlide(
       snapshot,
       async (image, text) => (await ai.llm.generateObject(prompts.slideVerifyV1({ png: image, renderedText: text }))).value.numbers,
+      art,
     );
     if (verification === "fallback") ctx.logger.warn({ answerCardId: card.id, missing, err: error }, "slide verification did not pass; using the fallback template");
     const pngUrl = await ctx.storage.put(`projects/${project.id}/slides/${card.id}.png`, png, "image/png");
@@ -253,5 +264,5 @@ export async function renderSlides(payload: SlidesPayload, ctx: JobContext, opti
   const pdfUrl = await ctx.storage.put(`projects/${project.id}/qa-kit/appendix.pdf`, await slidesPdf(pngs), "application/pdf");
   await ctx.db.update(slidesTable).set({ pdfUrl }).where(eq(slidesTable.projectId, project.id));
   await ctx.progress({ pct: 100, step: "Slides ready" });
-  return { slides: cards.length, ...results, pdfUrl };
+  return { slides: cards.length, ...results, pdfUrl, imageModel: artwork?.modelId ?? null };
 }

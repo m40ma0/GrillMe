@@ -16,6 +16,8 @@ export interface StudioProps {
   personas: StudioPersona[];
   criteria: { id: string; name: string }[];
   sections: { key: SectionKey; title: string; budgetSec: number }[];
+  /** The tracker the session will use, known before it starts ("sam" or "phash"). */
+  expectedVision: string;
 }
 
 export const DISC = ["bg-persona-1/15 ring-persona-1", "bg-persona-2/15 ring-persona-2", "bg-persona-3/15 ring-persona-3"] as const;

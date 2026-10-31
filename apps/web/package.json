@@ -11,6 +11,7 @@
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
     "clip": "node scripts/record-landing-clip.mjs",
+    "fallback-clip": "node scripts/record-fallback-clip.mjs",
     "screenshots": "node scripts/readme-screenshots.mjs"
   },
   "dependencies": {

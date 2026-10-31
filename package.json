@@ -16,11 +16,13 @@
     "db:generate": "pnpm --filter @stage-ready/db db:generate",
     "db:migrate": "pnpm --filter @stage-ready/db db:migrate",
     "db:seed": "pnpm --filter @stage-ready/db db:seed",
+    "db:cleanup": "pnpm --filter @stage-ready/db db:cleanup",
     "companion": "pnpm --filter @stage-ready/companion start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "simple-git-hooks",
-    "ai:check": "pnpm --filter @stage-ready/ai check"
+    "ai:check": "pnpm --filter @stage-ready/ai check",
+    "env:check": "pnpm --filter @stage-ready/config env:check"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

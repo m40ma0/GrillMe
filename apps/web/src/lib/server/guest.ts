@@ -1,13 +1,10 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { users, type Db } from "@stage-ready/db";
-import { and, eq, lt } from "drizzle-orm";
+import { deleteExpiredGuests, users, type Db } from "@stage-ready/db";
 
 /** Guest demo: an anonymous user per browser, identified by a signed httpOnly cookie that lasts 24 h. */
 export const GUEST_COOKIE = "sr_guest";
 export const GUEST_TTL_MS = 24 * 60 * 60 * 1000;
-/** Guest users and their projects are deleted this long after creation. */
-const GUEST_RETENTION_MS = 48 * 60 * 60 * 1000;
 
 const sign = (payload: string, secret: string) => createHmac("sha256", secret).update(`guest:${payload}`).digest("base64url");
 
@@ -31,7 +28,7 @@ export function readGuestToken(token: string | undefined, secret: string, now = 
 
 /** Creates a guest user and removes guests older than the retention window. */
 export async function createGuest(db: Db): Promise<{ id: string }> {
-  await db.delete(users).where(and(eq(users.isGuest, true), lt(users.createdAt, new Date(Date.now() - GUEST_RETENTION_MS))));
+  await deleteExpiredGuests(db);
   const id = crypto.randomUUID();
   const [row] = await db
     .insert(users)

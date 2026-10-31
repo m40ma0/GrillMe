@@ -5,10 +5,23 @@ const tracer = trace.getTracer("@stage-ready/ai");
 
 export type ModelPrices = Record<string, { inputPerMTok: number; outputPerMTok: number }>;
 
+/**
+ * Meta's published Standard-mode token prices, USD per 1M tokens, from https://dev.meta.ai/docs/pricing-rate-limits
+ * (checked 2026-10-31). Cached input ($0.15 Spark, $0.20 Wonder) is billed as full input here, so costs err high.
+ * MODEL_PRICES overrides or extends these per model. Muse Image, SAM 3.1 and Muse Voice Transcribe are priced per
+ * image, frame or hour, not per token, so they are not counted in session cost.
+ */
+export const DEFAULT_MODEL_PRICES: ModelPrices = {
+  "muse-spark-1.3": { inputPerMTok: 1.25, outputPerMTok: 4.25 },
+  "muse-spark-1.2": { inputPerMTok: 1.25, outputPerMTok: 4.25 },
+  "muse-spark-1.1": { inputPerMTok: 1.25, outputPerMTok: 4.25 },
+  "muse-wonder-1.0": { inputPerMTok: 4.0, outputPerMTok: 20.0 },
+};
+
 export function parsePrices(json: string | undefined): ModelPrices {
-  if (!json) return {};
+  if (!json) return { ...DEFAULT_MODEL_PRICES };
   try {
-    return JSON.parse(json) as ModelPrices;
+    return { ...DEFAULT_MODEL_PRICES, ...(JSON.parse(json) as ModelPrices) };
   } catch {
     throw new Error('MODEL_PRICES must be JSON like {"model-id": {"inputPerMTok": 0.5, "outputPerMTok": 1.5}}.');
   }

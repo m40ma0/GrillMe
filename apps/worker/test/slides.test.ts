@@ -45,4 +45,16 @@ describe("evidence slides", () => {
     });
     expect(out.verification).toBe("fallback");
   });
+
+  it("draws Muse Image art behind the content with a caption, and still verifies", async () => {
+    // A 1×1 PNG stands in for the generated background.
+    const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const art = { dataUrl: `data:image/png;base64,${pixel}`, caption: "Image: Muse Image 1.0" };
+    const { svg, text } = await composeSlide(snapshot, { withChart: true, art });
+    expect(svg).toContain('<image href="data:image/png;base64,');
+    expect(text).toContain("Image: Muse Image 1.0");
+    const out = await renderVerifiedSlide(snapshot, async (_png, drawn) => drawn.flatMap((t) => t.match(/\d[\d,.]*/g) ?? []), art);
+    expect(out.verification).toBe("passed");
+    expect(out.png.length).toBeGreaterThan(1000);
+  });
 });

@@ -1,5 +1,5 @@
 import websocket from "@fastify/websocket";
-import { BudgetedLLM, MetaModelAdapter, createAi, createDemoAi, metaApiKey } from "@stage-ready/ai";
+import { BudgetedLLM, MetaModelAdapter, MuseVoiceTranscriber, createAi, createDemoAi, metaApiKey } from "@stage-ready/ai";
 import { RealtimeEnv, loadRootEnv, parseEnv, verifySessionToken } from "@stage-ready/config";
 import { startTelemetry } from "@stage-ready/config/telemetry";
 import { createDb, projects, sessions as sessionsTable } from "@stage-ready/db";
@@ -33,6 +33,13 @@ const demo = createDemoAi(env, live, mock, redis, logger);
 app.log.info({ models: live.mode, reason: live.reason }, "model adapters ready");
 // After each session the worker writes Coach Notes (Rehearsal Memory).
 const jobs = new Queue(QUEUE_NAME, { connection: redis, defaultJobOptions: { attempts: 2, removeOnComplete: { age: 86_400 } } });
+// Muse Voice Transcribe for final transcripts: needs a Meta key and base URL, and MODEL_TRANSCRIBE not "none".
+const transcribeKey = metaApiKey(env);
+const transcriber =
+  !env.MODEL_MOCK && transcribeKey && env.META_API_BASE_URL && env.MODEL_TRANSCRIBE !== "none"
+    ? new MuseVoiceTranscriber({ baseUrl: env.META_API_BASE_URL, apiKey: transcribeKey, model: env.MODEL_TRANSCRIBE })
+    : null;
+
 const onEnded = (projectId: string, sessionId: string) =>
   void jobs.add("session-review", { projectId, sessionId }).catch((error: unknown) => logger.error({ err: error }, "could not queue the session review"));
 
@@ -86,6 +93,7 @@ async function open(sid: string, pid: string): Promise<Entry | null> {
     visionUrl: env.VISION_SERVICE_URL,
     visionToken: env.VISION_SERVICE_TOKEN,
     speechModelConfigured: Boolean(env.MODEL_STT),
+    transcriber,
     onEnded,
   });
   return { kind: "rehearsal", session, expiry: null };

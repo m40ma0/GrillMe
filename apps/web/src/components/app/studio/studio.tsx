@@ -318,7 +318,7 @@ export function Studio(props: StudioProps) {
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={50} minSize={35}>
-          <PreviewPanel stream={stream} sections={props.sections} overlay={overlay} onOverlay={setOverlay} />
+          <PreviewPanel stream={stream} sections={props.sections} overlay={overlay} onOverlay={setOverlay} expectedVision={props.expectedVision} />
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={25} minSize={18}>

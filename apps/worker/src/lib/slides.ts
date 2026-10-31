@@ -73,10 +73,22 @@ export interface ComposedSlide {
   text: string[];
 }
 
+/** A generated background for the deck (Muse Image), drawn dimmed behind the content with a caption naming the model. */
+export interface SlideArt {
+  dataUrl: string;
+  caption: string;
+}
+
 /** The evidence slide: title, chart and the key facts. `withChart: false` is the deterministic fallback template. */
-export async function composeSlide(s: SlideSnapshot, options: { withChart: boolean }): Promise<ComposedSlide> {
+export async function composeSlide(s: SlideSnapshot, options: { withChart: boolean; art?: SlideArt | null }): Promise<ComposedSlide> {
   const text: string[] = [];
-  const parts: string[] = [`<rect width="${SLIDE_W}" height="${SLIDE_H}" fill="${C.bg}"/>`, `<rect y="${SLIDE_H - 10}" width="${SLIDE_W}" height="10" fill="${C.accent}"/>`];
+  const parts: string[] = [`<rect width="${SLIDE_W}" height="${SLIDE_H}" fill="${C.bg}"/>`];
+  if (options.art) {
+    // The art sits under a dark scrim so every number stays legible; it carries no text of its own.
+    parts.push(`<image href="${options.art.dataUrl}" x="0" y="0" width="${SLIDE_W}" height="${SLIDE_H}" preserveAspectRatio="xMidYMid slice" opacity="0.55"/>`);
+    parts.push(`<rect width="${SLIDE_W}" height="${SLIDE_H}" fill="${C.bg}" opacity="0.6"/>`);
+  }
+  parts.push(`<rect y="${SLIDE_H - 10}" width="${SLIDE_W}" height="10" fill="${C.accent}"/>`);
   const title = wrap(s.title, 46, 2);
   title.forEach((line, i) => parts.push(`<text x="100" y="${150 + i * 76}" font-family="${FONT}" font-size="64" font-weight="bold" fill="${C.fg}">${esc(line)}</text>`));
   text.push(...title);
@@ -111,6 +123,10 @@ export async function composeSlide(s: SlideSnapshot, options: { withChart: boole
     parts.push(`<text x="100" y="${SLIDE_H - 50}" font-family="${FONT}" font-size="24" fill="${C.muted}">${esc(src)}</text>`);
     text.push(src);
   }
+  if (options.art) {
+    parts.push(`<text x="${SLIDE_W - 100}" y="${SLIDE_H - 50}" text-anchor="end" font-family="${FONT}" font-size="22" fill="${C.muted}">${esc(options.art.caption)}</text>`);
+    text.push(options.art.caption);
+  }
   return { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_W}" height="${SLIDE_H}" viewBox="0 0 ${SLIDE_W} ${SLIDE_H}">${parts.join("")}</svg>`, text };
 }
 
@@ -134,16 +150,16 @@ export async function slidesPdf(pngs: Uint8Array[]): Promise<Uint8Array> {
  * Renders the chart slide, has a reader list the numbers on the PNG, and compares them with the
  * snapshot. On any missing number, or if the reader fails, renders the deterministic fallback template.
  */
-export async function renderVerifiedSlide(snapshot: SlideSnapshot, read: (png: Uint8Array, drawnText: string[]) => Promise<string[]>) {
-  const slide = await composeSlide(snapshot, { withChart: true });
+export async function renderVerifiedSlide(snapshot: SlideSnapshot, read: (png: Uint8Array, drawnText: string[]) => Promise<string[]>, art: SlideArt | null = null) {
+  const slide = await composeSlide(snapshot, { withChart: true, art });
   const png = svgToPng(slide.svg);
   try {
     const check = verifySlideNumbers(snapshotNumbers(snapshot), await read(png, slide.text));
     if (check.ok) return { png, verification: "passed" as const, missing: [] as string[], error: null };
-    const fallback = await composeSlide(snapshot, { withChart: false });
+    const fallback = await composeSlide(snapshot, { withChart: false, art });
     return { png: svgToPng(fallback.svg), verification: "fallback" as const, missing: check.missing, error: null };
   } catch (error) {
-    const fallback = await composeSlide(snapshot, { withChart: false });
+    const fallback = await composeSlide(snapshot, { withChart: false, art });
     return { png: svgToPng(fallback.svg), verification: "fallback" as const, missing: [] as string[], error: error as Error };
   }
 }

@@ -33,6 +33,8 @@ export interface RunState {
   stepIndex: number;
   totalFallbackMs: number;
   fallbackSeekMs: number | null;
+  /** Frozen from fallback or recovering: the Stage window keeps the clip. */
+  holdClip: boolean;
   badgeVisible: boolean;
   companion: { connected: boolean; version: string | null };
   vision: "sam" | "heuristic" | null;
@@ -57,6 +59,7 @@ const initial: RunState = {
   stepIndex: 0,
   totalFallbackMs: 0,
   fallbackSeekMs: null,
+  holdClip: false,
   badgeVisible: true,
   companion: { connected: false, version: null },
   vision: null,
@@ -99,9 +102,10 @@ export function useDemoGuardRun(projectId: string, steps: StepDTO[]) {
       total: steps.length,
       fallbackSeekMs: run.fallbackSeekMs,
       badgeVisible: run.badgeVisible,
+      holdClip: run.holdClip,
     };
     channel.current?.postMessage(message);
-  }, [run.phase, run.stepIndex, run.fallbackSeekMs, run.badgeVisible, steps]);
+  }, [run.phase, run.stepIndex, run.fallbackSeekMs, run.badgeVisible, run.holdClip, steps]);
 
   const browserChecks = useCallback(
     (connected: boolean, capturing: boolean): PreflightCheck[] => [
@@ -132,6 +136,7 @@ export function useDemoGuardRun(projectId: string, steps: StepDTO[]) {
           return {
             ...r,
             phase: m.state,
+            holdClip: m.state === "frozen" && (r.phase === "fallback" || r.phase === "recovering" || r.holdClip),
             stepIndex: m.stepIndex ?? r.stepIndex,
             totalFallbackMs: m.totalFallbackMs ?? r.totalFallbackMs,
             fallbackSeekMs: m.fallbackSeekMs ?? null,

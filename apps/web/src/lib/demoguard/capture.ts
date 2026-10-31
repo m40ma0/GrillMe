@@ -73,6 +73,8 @@ export interface CueMessage {
   fallbackSeekMs: number | null;
   /** Whether the Recorded-segment badge shows during fallback. */
   badgeVisible: boolean;
+  /** Frozen while recovering: the Stage window holds the paused fallback clip instead of the live picture. */
+  holdClip?: boolean;
 }
 
 /** What the Stage window asks of the Live control window. */

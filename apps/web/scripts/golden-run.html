@@ -1,0 +1,345 @@
+<!doctype html>
+<!--
+  The Demo Mode golden run: a scripted happy path through the fictional Signal Garden app, recorded by
+  scripts/record-fallback-clip.mjs. Each step lasts 12 s so the clip lines up with demoSteps' fallbackInMs
+  (0, 12, 24, 36, 48 s) in packages/shared/src/demo-fixtures.ts.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Signal Garden (fictional) · golden run</title>
+    <style>
+      :root {
+        --bg: #0f1412;
+        --panel: #172019;
+        --line: #2a3a2f;
+        --fg: #e8f1ea;
+        --muted: #93a598;
+        --accent: #4ade80;
+        --warn: #fbbf24;
+        --bad: #f87171;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          16px/1.45 "Helvetica Neue",
+          Arial,
+          sans-serif;
+      }
+      header {
+        height: 56px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      header b {
+        font-size: 18px;
+      }
+      header .dot {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #86efac, #15803d);
+      }
+      header .step {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        height: 664px;
+      }
+      aside {
+        border-right: 1px solid var(--line);
+        padding: 16px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+      .report {
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        transition:
+          border-color 0.3s,
+          transform 0.3s;
+      }
+      .report small {
+        color: var(--muted);
+        display: block;
+      }
+      .report.sel {
+        border-color: var(--accent);
+        transform: translateX(4px);
+      }
+      .tag {
+        display: inline-block;
+        font-size: 12px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        margin-right: 6px;
+        background: #1f2d24;
+        color: var(--muted);
+      }
+      .tag.urgent {
+        background: #3b1d1d;
+        color: var(--bad);
+      }
+      main {
+        padding: 24px 32px;
+        position: relative;
+      }
+      h2 {
+        margin: 0 0 6px;
+        font-size: 24px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        padding: 18px 20px;
+        margin-top: 16px;
+      }
+      .plan li {
+        margin: 8px 0;
+        opacity: 0;
+        transform: translateY(6px);
+        transition:
+          opacity 0.4s,
+          transform 0.4s;
+      }
+      .plan li.on {
+        opacity: 1;
+        transform: none;
+      }
+      .bar {
+        height: 10px;
+        border-radius: 5px;
+        background: #1f2d24;
+        overflow: hidden;
+        margin-top: 6px;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+        width: 0;
+        transition: width 1.2s ease-out;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .check {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin: 10px 0;
+      }
+      .box {
+        width: 20px;
+        height: 20px;
+        border-radius: 5px;
+        border: 2px solid var(--muted);
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        transition: background 0.3s;
+      }
+      .box.on {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #052e12;
+      }
+      .scene {
+        display: none;
+      }
+      .scene.on {
+        display: block;
+      }
+      .spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 3px solid #2a3a2f;
+        border-top-color: var(--accent);
+        display: inline-block;
+        vertical-align: -3px;
+        animation: s 0.8s linear infinite;
+        margin-right: 8px;
+      }
+      @keyframes s {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .cursor {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.85);
+        box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.15);
+        transition:
+          left 0.8s ease-in-out,
+          top 0.8s ease-in-out;
+        pointer-events: none;
+        z-index: 5;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="dot"></span><b>Signal Garden</b><span class="muted">· fictional demo app</span>
+      <span class="step" id="step">Step 1 of 5 · Open report inbox</span>
+    </header>
+    <div class="layout">
+      <aside id="inbox">
+        <div class="muted" style="font-size: 13px">Report inbox · 6 new</div>
+      </aside>
+      <main>
+        <section class="scene on" data-scene="0">
+          <h2>Report inbox</h2>
+          <p class="muted">Field reports from three teams, grouped by location as they arrive.</p>
+          <div class="grid2">
+            <div class="card">
+              <b>North district</b>
+              <p class="muted">3 reports · 1 urgent</p>
+              <div class="bar"><i data-w="72%"></i></div>
+            </div>
+            <div class="card">
+              <b>River crossing</b>
+              <p class="muted">2 reports</p>
+              <div class="bar"><i data-w="40%"></i></div>
+            </div>
+            <div class="card">
+              <b>Market square</b>
+              <p class="muted">1 report</p>
+              <div class="bar"><i data-w="18%"></i></div>
+            </div>
+            <div class="card">
+              <b>Unassigned</b>
+              <p class="muted">0 reports</p>
+              <div class="bar"><i data-w="2%"></i></div>
+            </div>
+          </div>
+        </section>
+        <section class="scene" data-scene="1">
+          <h2>Field report #2041</h2>
+          <p class="muted">North district · received 09:42 · Team Kestrel</p>
+          <div class="card">
+            “Water over the road near the north bridge, two cars stuck, one elderly resident asking for help leaving the house, power out on Elm St since early morning. Pls send someone.”
+          </div>
+          <p class="muted" style="margin-top: 16px"><span class="tag urgent">urgent</span><span class="tag">flooding</span><span class="tag">welfare check</span><span class="tag">power</span></p>
+        </section>
+        <section class="scene" data-scene="2">
+          <h2>Response plan</h2>
+          <p class="muted" id="gen"><span class="spinner"></span>Generating a plan from report #2041…</p>
+          <ol class="card plan" id="plan">
+            <li><b>Now:</b> send the welfare team to 14 Elm St for the resident who asked for help.</li>
+            <li><b>Now:</b> close the north bridge road; notify traffic control.</li>
+            <li><b>Within 1 h:</b> report the Elm St outage to the utility, with the time it started.</li>
+            <li><b>Within 2 h:</b> recheck the two stuck vehicles once the water drops.</li>
+          </ol>
+        </section>
+        <section class="scene" data-scene="3">
+          <h2>Compare with earlier incidents</h2>
+          <p class="muted">Same location, last 30 days.</p>
+          <div class="grid2">
+            <div class="card">
+              <b>Today · #2041</b>
+              <p class="muted">Flooding, welfare check, power</p>
+              <div class="bar"><i data-w="85%"></i></div>
+            </div>
+            <div class="card">
+              <b>12 days ago · #1877</b>
+              <p class="muted">Flooding at the north bridge</p>
+              <div class="bar"><i data-w="55%"></i></div>
+            </div>
+          </div>
+          <div class="card">Repeat location: the north bridge has flooded twice this month. Suggest a standing road-closure plan.</div>
+        </section>
+        <section class="scene" data-scene="4">
+          <h2>Follow-up checklist</h2>
+          <p class="muted">A coordinator owns each follow-up before the plan goes out.</p>
+          <div class="card" id="checks">
+            <div class="check"><span class="box"></span>Welfare team confirmed on site</div>
+            <div class="check"><span class="box"></span>Road closure acknowledged</div>
+            <div class="check"><span class="box"></span>Utility ticket opened</div>
+            <div class="check"><span class="box"></span>Vehicles rechecked</div>
+          </div>
+        </section>
+        <div class="cursor" id="cursor" style="left: 900px; top: 500px"></div>
+      </main>
+    </div>
+    <script>
+      const STEP_MS = 12_000;
+      const names = ["Open report inbox", "Select field report", "Generate response plan", "Compare incident history", "Review follow-up checklist"];
+      const reports = [
+        ["#2041 · North district", "Water over the road near the north bridge…", true],
+        ["#2040 · River crossing", "Fallen tree, lane partly blocked", false],
+        ["#2039 · Market square", "Stall owners report a gas smell", false],
+        ["#2038 · North district", "Streetlight out at the school gate", false],
+        ["#2037 · River crossing", "Debris on the footpath", false],
+        ["#2036 · North district", "Resident asks about sandbags", false],
+      ];
+      const inbox = document.getElementById("inbox");
+      for (const [title, text, urgent] of reports) {
+        const el = document.createElement("div");
+        el.className = "report";
+        el.innerHTML = `${urgent ? '<span class="tag urgent">urgent</span>' : ""}<b>${title}</b><small>${text}</small>`;
+        inbox.appendChild(el);
+      }
+      const cursor = document.getElementById("cursor");
+      const moveTo = (x, y) => Object.assign(cursor.style, { left: `${x}px`, top: `${y}px` });
+      const at = (ms, fn) => setTimeout(fn, ms);
+
+      function show(i) {
+        document.querySelectorAll(".scene").forEach((s) => s.classList.toggle("on", Number(s.dataset.scene) === i));
+        document.getElementById("step").textContent = `Step ${i + 1} of 5 · ${names[i]}`;
+        requestAnimationFrame(() => document.querySelectorAll(`[data-scene="${i}"] .bar i`).forEach((b) => (b.style.width = b.dataset.w)));
+      }
+
+      function run() {
+        show(0);
+        at(1500, () => moveTo(180, 120));
+        at(STEP_MS - 1500, () => document.querySelectorAll(".report")[0].classList.add("sel"));
+        at(STEP_MS, () => show(1));
+        at(STEP_MS + 3000, () => moveTo(620, 380));
+        at(2 * STEP_MS, () => show(2));
+        const items = document.querySelectorAll("#plan li");
+        at(2 * STEP_MS + 2500, () => (document.getElementById("gen").textContent = "Plan ready in 2.1 s · checked by a coordinator before it goes out"));
+        items.forEach((li, k) => at(2 * STEP_MS + 2800 + k * 1200, () => li.classList.add("on")));
+        at(3 * STEP_MS, () => show(3));
+        at(3 * STEP_MS + 2000, () => moveTo(760, 280));
+        at(4 * STEP_MS, () => show(4));
+        document.querySelectorAll("#checks .box").forEach((box, k) =>
+          at(4 * STEP_MS + 1500 + k * 1500, () => {
+            box.classList.add("on");
+            box.textContent = "✓";
+            moveTo(380, 160 + k * 42);
+          }),
+        );
+      }
+      window.startGoldenRun = run;
+      if (!location.search.includes("manual")) run();
+    </script>
+  </body>
+</html>

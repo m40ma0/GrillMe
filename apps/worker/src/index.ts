@@ -22,7 +22,7 @@ const env = parseEnv("worker", WorkerEnv);
 await startTelemetry("stage-ready-worker");
 const logger = pino({ name: "worker", level: env.LOG_LEVEL });
 const db = createDb(env.DATABASE_URL);
-const storage = createStorage(env);
+const storage = createStorage(env, logger);
 const live = createAi(env, logger);
 const mock = createAi(env, logger, { forceMock: true });
 logger.info({ models: live.mode, reason: live.reason }, live.mode === "meta" ? "using the Meta Model API" : "using mocked model adapters");

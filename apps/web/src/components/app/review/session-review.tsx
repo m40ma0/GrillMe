@@ -1,5 +1,5 @@
 "use client";
-import { DEFAULT_STEP_BUDGET_MS, formatSeconds, type ClaimStatus, modelUseLabel } from "@stage-ready/shared";
+import { DEFAULT_STEP_BUDGET_MS, formatSeconds, type ClaimStatus, modelUseLabel, transcriptLabel } from "@stage-ready/shared";
 import { useQuery } from "@tanstack/react-query";
 import { NotebookPen } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -150,6 +150,7 @@ export function SessionReview({ data }: { data: SessionReviewDTO }) {
               {s ? (
                 <>
                   <span className="font-mono tabular-nums">{formatSeconds(s.durationMs)}</span> · {s.interruptions} interruption{s.interruptions === 1 ? "" : "s"} · {modelUseLabel(s)}
+                  {s.transcript?.source === "muse" ? " · transcript by Muse Voice Transcribe" : ""}
                 </>
               ) : (
                 "This session has no summary yet."
@@ -351,6 +352,9 @@ export function SessionReview({ data }: { data: SessionReviewDTO }) {
       <TabsContent value="transcript" className="grid gap-4 lg:grid-cols-2" forceMount hidden={tab !== "transcript"}>
         <RecordingPlayer ref={video} sessionId={data.session.id} transcript={data.transcript} />
         <ul className="grid max-h-[32rem] content-start gap-1.5 overflow-y-auto pr-2">
+          <li className="text-muted-foreground text-xs" data-testid="transcript-source">
+            {transcriptLabel(s?.transcript, s?.stt)}
+          </li>
           {data.transcript.map((seg) => (
             <li key={seg.id}>
               <button type="button" onClick={() => seek(seg.startMs)} className="hover:bg-muted focus-visible:ring-primary w-full rounded-md p-1 text-left focus-visible:ring-2">

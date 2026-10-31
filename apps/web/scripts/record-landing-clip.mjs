@@ -57,7 +57,7 @@ scenes.push(
   await scene("landing", "One click into a fictional Demo Mode project", 3.5, async (page, mark) => {
     await page.goto(BASE, { waitUntil: "networkidle" });
     await page.waitForTimeout(1200);
-    await page.getByRole("button", { name: /Try Demo Mode/ }).click();
+    await page.getByRole("link", { name: /Try Demo Mode/ }).click();
     await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(1500);

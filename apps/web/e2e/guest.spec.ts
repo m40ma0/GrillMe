@@ -12,7 +12,7 @@ test("a signed-out visitor goes from the landing page to the Demo Mode project i
   await page.goto("/");
   await expect(page.locator("video[src='/clip.mp4']")).toBeVisible();
   const started = Date.now();
-  await page.getByRole("button", { name: /Try Demo Mode/ }).click();
+  await page.getByRole("link", { name: /Try Demo Mode/ }).click();
   await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { name: "Signal Garden" })).toBeVisible();
   expect(Date.now() - started).toBeLessThan(10_000);
@@ -28,13 +28,24 @@ test("a signed-out visitor goes from the landing page to the Demo Mode project i
   expect(upload.status()).toBe(403);
 });
 
+test("Try Demo Mode paints a progress page at once, and a returning guest reuses their project", async ({ page }) => {
+  await page.goto("/demo/starting");
+  await expect(page.getByRole("heading", { name: "Setting up your demo project…" })).toBeVisible();
+  await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
+  const first = page.url();
+  // Same browser, same guest cookie: no second seed, same project, and no guest allowance used.
+  const again = await page.request.post("/api/demo", { headers: { accept: "application/json" } });
+  expect(again.status()).toBe(200);
+  expect(first.endsWith((await again.json()).location)).toBe(true);
+});
+
 test("signed out, the workspace sends you to the branded sign-in page, which offers the guest demo", async ({ page }) => {
   await page.goto("/projects");
   await expect(page).toHaveURL(/\/signin\?callbackUrl=%2Fprojects|\/signin\?callbackUrl=\/projects/);
   await expect(page.getByRole("heading", { name: "Sign in to Stage Ready" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
   await expect(page.getByText("Read-only repo access; Stage Ready never writes to your repo.")).toBeVisible();
-  await page.getByRole("button", { name: "Try the guest demo" }).click();
+  await page.getByRole("link", { name: "Try the guest demo" }).click();
   await expect(page.getByRole("heading", { name: "Signal Garden" })).toBeVisible();
 });
 
@@ -67,7 +78,7 @@ test("the app icon, favicon and web manifest are served", async ({ request }) =>
 test("a rehearsal whose screen capture is blocked leaves no session behind", async ({ page }) => {
   // This project runs without fake media devices, so the browser refuses screen capture.
   await page.goto("/");
-  await page.getByRole("button", { name: /Try Demo Mode/ }).click();
+  await page.getByRole("link", { name: /Try Demo Mode/ }).click();
   await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
   const base = new URL(page.url()).pathname;
   await page.goto(`${base}/sessions`);

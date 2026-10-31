@@ -36,6 +36,20 @@ export interface SessionSummary {
   mockedCalls?: number;
   stt: string;
   flags?: AuditFlag[];
+  /**
+   * Where the stored transcript came from: "muse" once Muse Voice Transcribe has replaced the live
+   * transcript after the session, "live" for the faster-whisper captions (with `pending` while the final
+   * pass runs, or a `note` saying why it did not), "scripted" for Demo Mode's scripted speech.
+   */
+  transcript?: { source: "muse" | "live" | "scripted"; modelId?: string; latencyMs?: number; pending?: boolean; note?: string };
+}
+
+/** The caption under a session's transcript. */
+export function transcriptLabel(t: SessionSummary["transcript"] | undefined, stt: string | undefined): string {
+  if (t?.source === "muse") return `Transcript: Muse Voice Transcribe${t.latencyMs ? ` · ${(t.latencyMs / 1000).toFixed(1)} s` : ""}`;
+  if (t?.source === "scripted") return "Transcript: Demo Mode scripted speech";
+  if (t?.pending) return "Transcript: live captions (faster-whisper) · Muse Voice Transcribe is refining it";
+  return `Transcript: live captions (${stt && stt !== "none" ? stt : "faster-whisper"})${t?.note ? ` · ${t.note}` : " · Muse Voice Transcribe is not configured"}`;
 }
 
 /** One weak spot in Rehearsal Memory. `key` is stable across sessions so items can be diffed. */

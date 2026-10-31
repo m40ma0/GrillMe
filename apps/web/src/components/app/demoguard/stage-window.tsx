@@ -14,11 +14,22 @@ const TEST_DIALOG_MS = 4_000;
  * Recorded-segment badge; it cuts back when DemoGuard returns to Live at a step boundary. It follows the
  * DemoGuard page open in the same browser, like the cue window.
  */
-export function StageWindow({ projectId, projectName, fallbackClipUrl }: { projectId: string; projectName: string; fallbackClipUrl: string | null }) {
+export function StageWindow({
+  projectId,
+  projectName,
+  fallbackClipUrl,
+  fallbackClipName,
+}: {
+  projectId: string;
+  projectName: string;
+  fallbackClipUrl: string | null;
+  fallbackClipName: string | null;
+}) {
   const [cue, setCue] = useState<CueMessage | null>(null);
   const [live, setLive] = useState<MediaStream | null>(null);
   const [clipUrl, setClipUrl] = useState<string | null>(fallbackClipUrl);
-  const [clipName, setClipName] = useState<string | null>(fallbackClipUrl ? "Golden-run recording" : null);
+  const [clipName, setClipName] = useState<string | null>(fallbackClipUrl ? fallbackClipName : null);
+  const [clipReady, setClipReady] = useState(false);
   const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const liveRef = useRef<HTMLVideoElement>(null);
@@ -37,21 +48,25 @@ export function StageWindow({ projectId, projectName, fallbackClipUrl }: { proje
     if (liveRef.current) liveRef.current.srcObject = live;
   }, [live]);
 
-  const onFallback = cue?.state === "fallback" || cue?.state === "recovering";
   const frozen = cue?.state === "frozen";
+  const heldClip = frozen && cue?.holdClip === true;
+  // Frozen while recovering keeps the clip on screen (paused) until Resume.
+  const onFallback = cue?.state === "fallback" || cue?.state === "recovering" || heldClip;
 
   // Seek to the step's in-point before the crossfade starts, then play; pause it again on the way back.
   useEffect(() => {
     const clip = clipRef.current;
     if (!clip || !clipUrl) return;
-    if (onFallback) {
+    if (heldClip) {
+      clip.pause();
+    } else if (onFallback) {
       const seek = (cue?.fallbackSeekMs ?? 0) / 1000;
       if (Math.abs(clip.currentTime - seek) > 0.25) clip.currentTime = seek;
       void clip.play().catch(() => undefined);
     } else {
       clip.pause();
     }
-  }, [onFallback, cue?.fallbackSeekMs, cue?.step?.index, clipUrl]);
+  }, [onFallback, heldClip, cue?.fallbackSeekMs, cue?.step?.index, clipUrl]);
 
   useEffect(() => {
     const el = liveRef.current;
@@ -73,6 +88,7 @@ export function StageWindow({ projectId, projectName, fallbackClipUrl }: { proje
 
   const loadClip = (file: File | undefined) => {
     if (!file) return;
+    setClipReady(false);
     setClipUrl(URL.createObjectURL(file));
     setClipName(file.name);
   };
@@ -106,6 +122,8 @@ export function StageWindow({ projectId, projectName, fallbackClipUrl }: { proje
           muted
           playsInline
           preload="auto"
+          onCanPlay={() => setClipReady(true)}
+          onError={() => setError("The fallback clip could not be played. Load the golden-run file.")}
           aria-label="Fallback clip"
           data-testid="fallback-clip"
         />
@@ -137,7 +155,8 @@ export function StageWindow({ projectId, projectName, fallbackClipUrl }: { proje
         </Button>
         <label className="grid gap-1">
           <span className="flex items-center gap-1.5 text-white/80">
-            <FileVideo size={14} aria-hidden /> Fallback clip: {clipName ?? "none loaded"}
+            <FileVideo size={14} aria-hidden /> Fallback clip: <span data-testid="fallback-clip-status">{clipUrl ? (clipReady ? "ready" : "loading…") : "Load the golden-run file"}</span>
+            {clipName ? <span className="text-white/50">· {clipName}</span> : null}
           </span>
           <input
             type="file"

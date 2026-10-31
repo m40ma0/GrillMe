@@ -15,11 +15,13 @@ export function PreviewPanel({
   sections,
   overlay,
   onOverlay,
+  expectedVision,
 }: {
   stream: MediaStream | null;
   sections: { key: string; title: string; budgetSec: number }[];
   overlay: boolean;
   onOverlay: (v: boolean) => void;
+  expectedVision: string;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const regions = useStudio((s) => s.regions);
@@ -55,7 +57,7 @@ export function PreviewPanel({
           <Switch id="overlay" checked={overlay} onCheckedChange={onOverlay} />
           <Label htmlFor="overlay">UI outlines</Label>
         </div>
-        <span className="text-muted-foreground text-xs">{trackerLabel(vision)}</span>
+        <span className="text-muted-foreground text-xs">{trackerLabel(vision || expectedVision)}</span>
       </div>
       <section aria-label="Section timer" className="grid gap-1">
         <div className="bg-muted relative flex h-6 overflow-hidden rounded-md">

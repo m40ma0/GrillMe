@@ -22,11 +22,11 @@ export default async function ProjectsPage() {
         description="Each project holds one event, its rehearsals and your presentation plan."
         actions={
           <>
-            <form action="/api/demo" method="post">
-              <Button variant="outline" type="submit">
+            <Button asChild variant="outline">
+              <Link href="/demo/starting">
                 <Play /> Try Demo Mode
-              </Button>
-            </form>
+              </Link>
+            </Button>
             <Button asChild>
               <Link href="/projects/new">
                 <FolderPlus /> Create project

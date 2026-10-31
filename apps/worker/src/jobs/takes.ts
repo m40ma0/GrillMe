@@ -1,8 +1,10 @@
 import { scoreTranscribedTake } from "@stage-ready/ai";
 import { criteria, edls, eventSpecs, incidents, loadAuditFacts, loadRecentLatency, projects, renderJobs, sectionPlans, takeScores, takes } from "@stage-ready/db";
-import { CARD_MS, CROSSFADE_MS, chapters, takeWeightsFrom, timelineCaptions, timelineMs, toSrt, type JobPayload } from "@stage-ready/shared";
+import { CARD_MS, CROSSFADE_MS, chapters, storageFailure, takeWeightsFrom, timelineCaptions, timelineMs, toSrt, type JobPayload } from "@stage-ready/shared";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { UserFacingError, type JobContext } from "../lib/context";
+import { cachedArtwork } from "../lib/artwork";
+import { StorageUnavailable } from "../lib/s3";
 import { renderStatus, visionClient } from "../lib/vision";
 
 type TakePayload = Extract<JobPayload, { name: "take-process" }>;
@@ -158,7 +160,14 @@ export async function render(payload: RenderPayload, ctx: JobContext) {
       await ctx.db.update(renderJobs).set({ progress: status.progress }).where(eq(renderJobs.id, job.id));
       await ctx.progress({ pct, step: status.step });
     }
-    if (status.status === "failed") throw new UserFacingError(`The render failed: ${status.error ?? "unknown error"}`);
+    if (status.status === "failed") {
+      // The renderer writes to presigned URLs; a refused upload is a storage problem, not a render problem.
+      if (storageFailure({ message: status.error ?? "" }) === "credentials") {
+        ctx.logger.error({ renderError: status.error }, "render could not write to storage");
+        throw new StorageUnavailable("credentials");
+      }
+      throw new UserFacingError(`The render failed: ${status.error ?? "unknown error"}`);
+    }
 
     const outputs = { mp4: mp4.uri, thumbnail: thumbnail.uri, srt, chapters: chaptersUri };
     await ctx.db.update(renderJobs).set({ status: "done", progress: 1, outputs }).where(eq(renderJobs.id, job.id));
@@ -173,18 +182,16 @@ export async function render(payload: RenderPayload, ctx: JobContext) {
 const formatClock = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
 
 /** One abstract background for the intro and outro cards from Muse Image, or null (Demo Mode, no MODEL_IMAGE, or a failed call). */
-async function cardArtwork(ctx: JobContext, project: { id: string; name: string; tagline: string }, prefix: string): Promise<string | null> {
+async function cardArtwork(ctx: JobContext, project: { id: string; name: string; tagline: string; demoMode: boolean }, prefix: string): Promise<string | null> {
   const ai = await ctx.aiFor(project.id);
   if (!ai.image) return null;
-  await ctx.progress({ pct: 3, step: "Generating title card artwork" });
-  try {
-    const bytes = await ai.image.generate({
-      prompt: `Abstract, minimal 16:9 background artwork for the title card of a product demo video. Theme: ${project.tagline || project.name}. Dark, calm, soft gradients with subtle shapes. No text, no letters, no logos, no people.`,
-    });
-    const uri = await ctx.storage.put(`${prefix}/card-art`, bytes, bytes[0] === 0x89 ? "image/png" : "image/jpeg");
-    return await ctx.storage.presignGet(uri, 3600);
-  } catch (error) {
-    ctx.logger.warn({ err: error }, "card artwork failed; using plain title cards");
-    return null;
-  }
+  await ctx.progress({ pct: 3, step: "Generating title card artwork with Muse Image" });
+  // Demo Mode projects share one cached card, so every guest render shows the same generated art.
+  const art = await cachedArtwork(
+    ctx,
+    ai,
+    project.demoMode ? "demo/renders/muse-card-art" : `${prefix}/card-art`,
+    `Abstract, minimal 16:9 background artwork for the title card of a product demo video. Theme: ${project.tagline || project.name}. Dark, calm, soft gradients with subtle shapes. No text, no letters, no logos, no people.`,
+  );
+  return art ? ctx.storage.presignGet(ctx.storage.uri(project.demoMode ? "demo/renders/muse-card-art" : `${prefix}/card-art`), 3600) : null;
 }

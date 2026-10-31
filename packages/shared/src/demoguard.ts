@@ -160,12 +160,14 @@ export function dgReduce(state: DgState, event: DgEvent, steps: DgStep[], policy
     case "hotkey":
       if (event.action === "panic") return isWatching(state.phase) || state.phase === "recovering" || state.phase === "frozen" ? toFallback(state, steps, event.atMs, "panic", []) : same;
       if (event.action === "freeze") {
-        if (!isWatching(state.phase)) return same;
+        // From live: hold the live picture. From recovering: hold on the fallback clip (fallbackSinceMs keeps
+        // counting) instead of cutting back at the next step boundary, until Resume.
+        if (!isWatching(state.phase) && state.phase !== "recovering") return same;
         return { state: { ...state, phase: "frozen", recent: [] }, effects: [{ type: "incident", action: "freeze", stepIndex: state.stepIndex, signals: [], fallbackMs: 0 }] };
       }
       // Resume: back to live from fallback, recovering or frozen.
       if (onFallback(state.phase) || state.phase === "frozen") {
-        if (state.phase === "frozen")
+        if (state.phase === "frozen" && state.fallbackSinceMs === null)
           return { state: { ...state, phase: "live", stepStartedMs: event.atMs }, effects: [{ type: "incident", action: "resume", stepIndex: state.stepIndex, signals: [], fallbackMs: 0 }] };
         return toLive(state, event.atMs, "resume", state.stepIndex);
       }

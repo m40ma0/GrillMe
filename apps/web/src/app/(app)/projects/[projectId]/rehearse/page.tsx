@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/server/auth";
 import { db } from "@/lib/server/db";
 import { requireProject } from "@/lib/server/projects";
+import { expectedTracker } from "@/lib/server/vision";
 
 export const metadata: Metadata = { title: "Rehearsal Studio" };
 
@@ -18,10 +19,11 @@ export default async function RehearsePage({ params }: { params: Promise<{ proje
   const user = await getCurrentUser();
   if (!user) return null;
   const project = await requireProject(user.id, projectId);
-  const [personaRows, [spec], sections] = await Promise.all([
+  const [personaRows, [spec], sections, expectedVision] = await Promise.all([
     db().select().from(personas).where(eq(personas.projectId, project.id)).orderBy(asc(personas.createdAt)),
     db().select().from(eventSpecs).where(eq(eventSpecs.projectId, project.id)),
     db().select().from(sectionPlans).where(eq(sectionPlans.projectId, project.id)).orderBy(asc(sectionPlans.order)),
+    expectedTracker(project),
   ]);
   const criteriaRows = spec ? await db().select().from(criteria).where(eq(criteria.eventSpecId, spec.id)).orderBy(asc(criteria.order)) : [];
   if (personaRows.length === 0) {
@@ -47,6 +49,7 @@ export default async function RehearsePage({ params }: { params: Promise<{ proje
       personas={personaRows.map((p) => ({ id: p.id, role: p.role, label: PERSONA_ROLE_LABEL[p.role], voicePreset: p.voicePreset, questionStyle: p.questionStyle }))}
       criteria={criteriaRows.map((c) => ({ id: c.id, name: c.name }))}
       sections={sections.map((s) => ({ key: s.key, title: s.title, budgetSec: s.budgetSec }))}
+      expectedVision={expectedVision}
     />
   );
 }

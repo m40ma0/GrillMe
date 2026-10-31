@@ -344,4 +344,5 @@ export const demoRehearsalScript = [
   "In our pilot, urgent reports were triaged in 4 minutes instead of 25.",
 ];
 
-export const DEMO_FALLBACK_CLIP = "demo/fallback-golden-run.webm";
+/** The Demo Mode golden run, shipped with the web app (apps/web/public; re-record with `pnpm --filter @stage-ready/web fallback-clip`). */
+export const DEMO_FALLBACK_CLIP = "/demo/fallback-golden-run.mp4";

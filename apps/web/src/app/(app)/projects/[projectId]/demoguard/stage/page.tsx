@@ -1,4 +1,5 @@
 import { stepMaps } from "@stage-ready/db";
+import { DEMO_FALLBACK_CLIP } from "@stage-ready/shared";
 import { desc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { StageWindow } from "@/components/app/demoguard/stage-window";
@@ -16,8 +17,10 @@ export default async function StagePage({ params }: { params: Promise<{ projectI
   const user = await getCurrentUser();
   if (!user) return null;
   const project = await requireProject(user.id, projectId);
+  // Demo Mode ships its golden run with the app, so the cut works without storage.
+  if (project.demoMode) return <StageWindow projectId={project.id} projectName={project.name} fallbackClipUrl={DEMO_FALLBACK_CLIP} fallbackClipName="Signal Garden golden run" />;
   const [map] = await db().select({ clip: stepMaps.fallbackClipUrl }).from(stepMaps).where(eq(stepMaps.projectId, project.id)).orderBy(desc(stepMaps.createdAt)).limit(1);
   // The golden run's uploaded recording, if the project uploads recordings; otherwise the presenter loads the local file.
   const clip = map?.clip ? await presignGet(map.clip, 6 * 3600).catch(() => null) : null;
-  return <StageWindow projectId={project.id} projectName={project.name} fallbackClipUrl={clip} />;
+  return <StageWindow projectId={project.id} projectName={project.name} fallbackClipUrl={clip} fallbackClipName={clip ? "golden-run recording" : null} />;
 }

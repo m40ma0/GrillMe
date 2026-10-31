@@ -56,6 +56,17 @@ describe("DemoGuard state machine", () => {
     ["panic switches now", [...armedLive, { type: "hotkey", action: "panic", atMs: 2_000 }], "fallback"],
     ["freeze holds", [...armedLive, { type: "hotkey", action: "freeze", atMs: 2_000 }], "frozen"],
     ["resume after freeze", [...armedLive, { type: "hotkey", action: "freeze", atMs: 2_000 }, { type: "hotkey", action: "resume", atMs: 3_000 }], "live"],
+    ["freeze while recovering holds on the clip", [...armedLive, sig("error_dialog", 2_000), { type: "recovered", atMs: 3_000 }, { type: "hotkey", action: "freeze", atMs: 3_500 }], "frozen"],
+    [
+      "a frozen clip ignores the step boundary",
+      [...armedLive, sig("error_dialog", 2_000), { type: "recovered", atMs: 3_000 }, { type: "hotkey", action: "freeze", atMs: 3_500 }, { type: "tick", atMs: 20_000 }],
+      "frozen",
+    ],
+    [
+      "resume from a frozen clip goes live",
+      [...armedLive, sig("error_dialog", 2_000), { type: "recovered", atMs: 3_000 }, { type: "hotkey", action: "freeze", atMs: 3_500 }, { type: "hotkey", action: "resume", atMs: 6_000 }],
+      "live",
+    ],
     ["resume after fallback", [...armedLive, sig("error_dialog", 2_000), { type: "hotkey", action: "resume", atMs: 3_000 }], "live"],
     ["recovery waits for the step boundary", [...armedLive, sig("error_dialog", 2_000), { type: "recovered", atMs: 3_000 }, { type: "tick", atMs: 5_000 }], "recovering"],
     ["recovery cuts back at the boundary", [...armedLive, sig("error_dialog", 2_000), { type: "recovered", atMs: 3_000 }, { type: "tick", atMs: 10_000 }], "live"],
@@ -64,6 +75,19 @@ describe("DemoGuard state machine", () => {
   ];
   it.each(table)("%s", (_name, events, phase) => {
     expect(run(events).state.phase).toBe(phase);
+  });
+
+  it("resuming from a clip frozen while recovering cuts back to live and counts the fallback time", () => {
+    const { state, effects } = run([
+      ...armedLive,
+      sig("error_dialog", 2_000),
+      { type: "recovered", atMs: 3_000 },
+      { type: "hotkey", action: "freeze", atMs: 3_500 },
+      { type: "hotkey", action: "resume", atMs: 6_000 },
+    ]);
+    expect(state.fallbackSinceMs).toBeNull();
+    expect(state.totalFallbackMs).toBe(4_000);
+    expect(effects).toContainEqual({ type: "switch", to: "live", stepIndex: 0, seekMs: null });
   });
 
   it("switches to the current step's in-point and records the incident with its signals", () => {

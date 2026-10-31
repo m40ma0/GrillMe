@@ -20,23 +20,45 @@ kill -0 "$redis_pid" 2>/dev/null && redis-cli -p 6379 ping >/dev/null || { echo 
 
 pnpm db:migrate
 
-PORT=3000 pnpm --filter @stage-ready/web start &
-REALTIME_PORT=4000 pnpm --filter @stage-ready/realtime start &
-pnpm --filter @stage-ready/worker start &
+# Each service logs to the container output and to a file, so a crash at boot can be shown in one place.
+logs=/tmp/stage-ready-logs
+mkdir -p "$logs"
+PORT=3000 pnpm --filter @stage-ready/web start > >(tee "$logs/web.log") 2>&1 &
+web_pid=$!
+REALTIME_PORT=4000 pnpm --filter @stage-ready/realtime start > >(tee "$logs/realtime.log") 2>&1 &
+realtime_pid=$!
+pnpm --filter @stage-ready/worker start > >(tee "$logs/worker.log") 2>&1 &
+worker_pid=$!
+
+# 200 from /api/health on a local port, with bash alone (the slim image has no curl).
+healthy() {
+  local status
+  { exec 3<>"/dev/tcp/127.0.0.1/$1"; } 2>/dev/null || return 1
+  printf 'GET /api/health HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n' >&3
+  read -r -t 2 _ status _ <&3 || status=""
+  exec 3>&- 3<&-
+  [ "$status" = "200" ]
+}
 
 # Open the public port only once web and realtime answer, so a host that waits for the port (Modal) holds
-# the first visitor's request instead of showing the "starting" page.
-node -e '
-const up = (port) => fetch(`http://127.0.0.1:${port}/api/health`).then((r) => r.ok, () => false);
-const deadline = Date.now() + 120_000;
-(async () => {
-  while (Date.now() < deadline) {
-    if ((await up(3000)) && (await up(4000))) return;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  console.error("web or realtime did not answer within 2 minutes; opening the port anyway");
-})();
-'
+# the first visitor's request instead of showing the "starting" page. If any service exits meanwhile (a
+# ConfigError, a bad DATABASE_URL), stop at once with its last log lines instead of waiting out the deadline.
+deadline=$((SECONDS + 120))
+until healthy 3000 && healthy 4000; do
+  for name in web realtime worker; do
+    pid_var="${name}_pid"
+    if ! kill -0 "${!pid_var}" 2>/dev/null; then
+      echo "Stage Ready $name exited during startup. Its last 50 log lines:" >&2
+      tail -n 50 "$logs/$name.log" >&2 || true
+      exit 1
+    fi
+  done
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "web or realtime did not answer within 2 minutes; opening the port anyway" >&2
+    break
+  fi
+  sleep 0.5
+done
 node deploy/container/router.mjs &
 
 set +e

@@ -6,9 +6,14 @@ Deploy from the repo root, with the code you have checked out:
 Settings come from the Modal secret "stage-ready-app" (see docs/deploy.md). The app is served at
 https://<workspace>--stage-ready.modal.run; set PUBLIC_HOST in the secret to that host name.
 
-One container at most: Redis and live rehearsal sessions are in its memory. It scales to zero after
-20 idle minutes and starts again on the next visit (about a minute), so it only uses credits while in use.
-To keep it warm (no cold start), deploy with KEEP_WARM=1.
+One container at most: Redis and live rehearsal sessions are in its memory. During the judging window
+one container stays warm (no cold start); after judging, deploy with KEEP_WARM=0 so it scales to zero
+after 20 idle minutes and only uses credits while in use.
+
+Every page makes several Postgres round trips, so run the container next to the database: set
+MODAL_REGION at deploy time to the Modal region nearest your Postgres host (e.g. "us-east" for Neon
+us-east-1/us-east-2, "us-west" for us-west-2, "eu-west" for eu-central-1/eu-west, "ap-southeast" for
+ap-southeast-1). Pinning a region can carry a price multiplier on Modal; see docs/deploy.md.
 """
 
 import os
@@ -38,9 +43,12 @@ image = (
 app = modal.App("stage-ready", image=image)
 
 
-# KEEP_WARM=1 at deploy time keeps one container running (no cold start, e.g. while judging); it uses
-# credits while idle, so deploy again without it afterwards.
-KEEP_WARM = os.environ.get("KEEP_WARM", "").lower() in ("1", "true", "yes")
+# Warm by default for the judging window: one 2-CPU / 4 GiB container running around the clock costs
+# credits even when idle (roughly a day of CPU-hours per day). Deploy with KEEP_WARM=0 once judging ends.
+KEEP_WARM = os.environ.get("KEEP_WARM", "1").lower() not in ("0", "false", "no")
+
+# Modal region to run in, matching the Postgres host (see the docstring). Unset lets Modal choose.
+MODAL_REGION = os.environ.get("MODAL_REGION", "").strip() or None
 
 
 @app.function(
@@ -49,6 +57,7 @@ KEEP_WARM = os.environ.get("KEEP_WARM", "").lower() in ("1", "true", "yes")
     secrets=[modal.Secret.from_name("stage-ready-app")],
     max_containers=1,
     min_containers=1 if KEEP_WARM else 0,
+    region=MODAL_REGION,
     scaledown_window=1200,
     timeout=24 * 3600,
 )

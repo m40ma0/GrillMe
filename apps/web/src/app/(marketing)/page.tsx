@@ -38,11 +38,11 @@ export default function Landing() {
             A panel of fictional judges built from your event&apos;s real criteria interrupts with hard questions, every claim is checked against evidence, and your live demo has a disclosed fallback.
           </p>
           <div className="flex flex-wrap gap-3">
-            <form action="/api/demo" method="post">
-              <Button type="submit" size="lg">
+            <Button asChild size="lg">
+              <Link href="/demo/starting">
                 <Play /> Try Demo Mode
-              </Button>
-            </form>
+              </Link>
+            </Button>
             <Button asChild size="lg" variant="outline">
               <Link href="/projects/new">
                 Create a project <ArrowRight />

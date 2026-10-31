@@ -56,11 +56,11 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="bg-border h-px flex-1" /> or <span className="bg-border h-px flex-1" />
           </div>
-          <form action="/api/demo" method="post">
-            <Button type="submit" variant="outline" className="w-full">
+          <Button asChild variant="outline" className="w-full">
+            <Link href="/demo/starting">
               <Play aria-hidden /> Try the guest demo
-            </Button>
-          </form>
+            </Link>
+          </Button>
           <p className="text-muted-foreground text-center text-xs">
             No account needed: a fictional project, kept for 24 hours.{" "}
             <Link href="/" className="underline underline-offset-4">

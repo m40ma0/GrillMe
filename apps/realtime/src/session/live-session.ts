@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { promisedLatencyMs, prompts, type Ai } from "@stage-ready/ai";
+import { promisedLatencyMs, prompts, type Ai, type MuseVoiceTranscriber } from "@stage-ready/ai";
 import { sessions as sessionsTable, type Db } from "@stage-ready/db";
 import { eq } from "drizzle-orm";
 import {
@@ -31,6 +31,7 @@ import { candidates, type Candidate, type PolicyClaim } from "../judges/policy";
 import { ScriptedStt } from "../stt/scripted";
 import { SttUnavailableError, type SttStream } from "../stt/types";
 import { Vad, pcmFromBytes } from "../stt/vad";
+import { AudioRecorder, finalizeTranscript } from "./final-transcript";
 import { VisionWhisperStt } from "../stt/vision";
 import type { Tracker } from "../vision/tracker";
 import type { SessionContext } from "./context";
@@ -45,7 +46,9 @@ export interface SessionDeps {
   visionUrl: string | undefined;
   visionToken: string | undefined;
   speechModelConfigured: boolean;
-  /** Called once the session is persisted. */
+  /** Muse Voice Transcribe for the final transcript after the session; null keeps the live faster-whisper one. */
+  transcriber?: MuseVoiceTranscriber | null;
+  /** Called once the session is persisted (and its final transcript written), to queue the review. */
   onEnded?: (projectId: string, sessionId: string) => void;
 }
 
@@ -104,6 +107,8 @@ export class LiveSession {
   private startedAt: Date | null = null;
 
   private readonly segments: Segment[] = [];
+  /** The microphone audio, kept only when Muse Voice Transcribe will write the final transcript. */
+  private readonly recorder = new AudioRecorder();
   private readonly ledger: LedgerClaim[] = [];
   private readonly latency: (LatencyRecord & { endMs: number; detector: string; inputHash: string | null; outputHash: string | null })[] = [];
   /** Recent changed frames (the browser skips unchanged ones), for show-or-strike and the canned detector. */
@@ -255,7 +260,16 @@ export class LiveSession {
     if (wasStarted) await this.showOrStrike();
     this.sendState();
     if (!wasStarted) return null;
-    const summary = this.summary();
+    const transcriber = this.finalTranscriber();
+    const refine = transcriber !== null && this.recorder.durationMs >= 1_000;
+    const summary: SessionSummary = {
+      ...this.summary(),
+      transcript: this.ctx.demoMode
+        ? { source: "scripted" }
+        : refine
+          ? { source: "live", pending: true }
+          : { source: "live", ...(transcriber ? { note: "No audio was recorded for Muse Voice Transcribe." } : {}) },
+    };
     await persistSession(this.deps.db, this.ctx.projectId, this.ctx.sessionId, {
       startedAt: this.startedAt ?? new Date(),
       endedAt: new Date(),
@@ -277,13 +291,22 @@ export class LiveSession {
       rubricHeatmap: this.heatmap(),
     });
     this.send({ type: "session.summary", summaryId: this.ctx.sessionId });
-    this.deps.onEnded?.(this.ctx.projectId, this.ctx.sessionId);
+    const ids = { projectId: this.ctx.projectId, sessionId: this.ctx.sessionId };
+    // The final transcript runs after the summary is on screen; the review job waits for it.
+    if (refine && transcriber)
+      void finalizeTranscript({ db: this.deps.db, transcriber, logger: this.deps.logger }, ids, this.recorder).finally(() => this.deps.onEnded?.(ids.projectId, ids.sessionId));
+    else this.deps.onEnded?.(ids.projectId, ids.sessionId);
     return this.ctx.sessionId;
   }
 
   private heatmap(): Record<string, Record<string, number>> {
     const matrix = this.coverage.matrix();
     return Object.fromEntries(this.ctx.criteria.map((c) => [c.name, matrix[c.id] ?? {}]));
+  }
+
+  /** Real rehearsals only: Demo Mode speech is scripted, so there is nothing to transcribe. */
+  private finalTranscriber(): MuseVoiceTranscriber | null {
+    return this.ctx.demoMode ? null : (this.deps.transcriber ?? null);
   }
 
   summary(): SessionSummary {
@@ -313,6 +336,7 @@ export class LiveSession {
     if (this.state !== "live" && this.state !== "qa") return;
     this.observe(atMs);
     const pcm = pcmFromBytes(bytes);
+    if (this.finalTranscriber()) this.recorder.push(atMs, pcm);
     this.stt?.push(pcm, atMs);
     this.vad.push(pcm, atMs);
     // Turn-taking: the judge yields when the presenter keeps talking over it.

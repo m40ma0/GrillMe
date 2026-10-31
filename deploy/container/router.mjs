@@ -19,7 +19,27 @@ main{display:grid;justify-items:center;gap:12px;padding:24px;text-align:center}h
 
 const targetFor = (url = "/") => (url === "/ws" || url.startsWith("/ws?") ? REALTIME : WEB);
 
+const probe = (target, path) =>
+  fetch(`http://${target.host}:${target.port}${path}`, { signal: AbortSignal.timeout(6_000) }).then(
+    async (r) => ({ ok: r.ok, status: r.status, body: await r.json().catch(() => null) }),
+    () => ({ ok: false, status: 0, body: null }),
+  );
+
+// GET /healthz: the whole container at a glance (web, realtime, storage); 503 if any part is down.
+async function healthz(res) {
+  const [web, realtime, storage] = await Promise.all([probe(WEB, "/api/health"), probe(REALTIME, "/api/health"), probe(WEB, "/api/health/storage")]);
+  const report = {
+    ok: web.ok && realtime.ok && storage.ok,
+    web: web.ok ? "ok" : "down",
+    realtime: realtime.ok ? "ok" : "down",
+    storage: storage.body ?? { ok: false, reason: "unreachable" },
+  };
+  res.writeHead(report.ok ? 200 : 503, { "content-type": "application/json", "cache-control": "no-store" });
+  res.end(JSON.stringify(report));
+}
+
 const server = http.createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/healthz") return void healthz(res);
   const target = targetFor(req.url);
   const upstream = http.request({ ...target, method: req.method, path: req.url, headers: req.headers }, (reply) => {
     res.writeHead(reply.statusCode ?? 502, reply.headers);

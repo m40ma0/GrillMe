@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, RealtimeEnv, WebEnv, WorkerEnv, openSecret, parseEnv, sealSecret } from "../src";
+import { ConfigError, RealtimeEnv, WebEnv, WorkerEnv, clean, cleanEnv, openSecret, parseEnv, sealSecret } from "../src";
 
 const base = {
   DATABASE_URL: "postgres://stage:stage@localhost:5432/stageready",
@@ -68,5 +68,42 @@ describe("session tokens", () => {
     await expect(verifySessionToken(token, "another-secret-of-length")).rejects.toThrow();
     const old = await signSessionToken(claims, secret, Date.now() - 16 * 60_000);
     await expect(verifySessionToken(old, secret)).rejects.toThrow();
+  });
+});
+
+describe("env cleaning", () => {
+  it("strips inline comments, matching quotes, spaces and CRLF before validation", () => {
+    const env = parseEnv("worker", WorkerEnv, {
+      ...base,
+      DEMO_DAILY_CALL_LIMIT: "1500 # calls",
+      S3_ENDPOINT: '"https://s3.example.com"',
+      S3_BUCKET: " stage-ready\r",
+      AUTH_SECRET: "'0123456789abcdef0123'  # rotated in October",
+    });
+    expect(env.DEMO_DAILY_CALL_LIMIT).toBe(1500);
+    expect(env.S3_ENDPOINT).toBe("https://s3.example.com");
+    expect(env.S3_BUCKET).toBe("stage-ready");
+    expect(env.AUTH_SECRET).toBe("0123456789abcdef0123");
+  });
+
+  it("parses a CRLF dotenv file", async () => {
+    const { parseEnv: parseDotenv } = await import("node:util");
+    const file = Object.entries({ ...base, DEMO_DAILY_CALL_LIMIT: "1500" })
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\r\n");
+    const env = parseEnv("worker", WorkerEnv, parseDotenv(file));
+    expect(env.DATABASE_URL).toBe(base.DATABASE_URL);
+    expect(env.DEMO_DAILY_CALL_LIMIT).toBe(1500);
+  });
+
+  it("keeps a # that is part of the value", () => {
+    expect(clean("https://example.com/#anchor")).toBe("https://example.com/#anchor");
+    expect(clean('"a # b"')).toBe("a # b");
+    expect(clean("abc#def")).toBe("abc#def");
+  });
+
+  it("names cleaned keys and never their values", () => {
+    const { changed } = cleanEnv({ A: "1 # note", B: "plain", C: "" });
+    expect(changed).toEqual(["A"]);
   });
 });
