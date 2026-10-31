@@ -9,8 +9,9 @@ test("a failed repo digest says why and offers Retry, and survives a reload", as
   await panel.click();
   const failure = page.getByRole("alert").filter({ hasText: "Repo digest failed" });
   await expect(failure).toBeVisible({ timeout: 60_000 });
-  // GitHub answers 404 for a missing repo, or 403 when it rate-limits unauthenticated reads: either way a readable reason.
-  await expect(failure).toContainText(/not found|404|could not|refused|403|rate limit/i);
+  // The reason is GitHub's own answer in plain words: 404 for a missing repo, or 403 / 5xx when GitHub
+  // rate-limits or fails (as it can from CI); never a bare "failed".
+  await expect(failure).toContainText(/GitHub[^.]*\b(40\d|5\d\d)\b|not found|refused|rate limit/i);
   await expect(failure.getByRole("button", { name: /Retry/ })).toBeVisible();
   // After a reload the panel finds the failed job on the server and still shows the reason.
   await page.reload({ waitUntil: "networkidle" });

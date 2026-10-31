@@ -68,3 +68,11 @@ Tests: per-prompt effort and claim-verify images (ai, against recorded replies),
 ## Phase 6 · README for judges
 
 The README now leads with the pitch, the live link and the product clip, a three-image strip (Studio, Q&A Kit, DemoGuard switch; `pnpm --filter @stage-ready/web screenshots` retakes them from Demo Mode), a table of how each Meta model is used and where in code, an architecture diagram, the features, what is real and what is scripted in Demo Mode, local setup, deploy, tests and CI, decisions, team and licence (MIT, `LICENSE`). The milestone history and the M0 upgrade note moved to `docs/history.md`.
+
+## Phase 7 · Verification
+
+- New Playwright specs: `guest.spec.ts` (guest demo from a signed-out landing page, sign-in page, problem page, favicon and manifest, blocked capture), `jobs.spec.ts` (repo digest error surfacing), the Stage window in `demoguard.spec.ts`, model captions in `rehearsal.spec.ts`, and the brief in `qa-kit.spec.ts`.
+- All checks pass locally (lint, format, typecheck, unit tests, build, 13 e2e specs, vision pytest) and in CI on every phase's commit.
+- Two test assertions were loosened for real-world noise, not to hide failures: the stopwatch reading accepts 8.5–10.9 s for a 9.2 s step sampled at 2 fps, and the repo-digest reason accepts any readable GitHub status (404, 403, 5xx), since GitHub answers differently from CI and sandboxes.
+
+Left for the owner, since they need the live deploy, the key or the accounts: deploy and repeat the Phase 1–4 acceptance checks on the live URL (captions should read "Muse Spark" there; claim-chip p95 under 2 s over ten sentences needs measuring with the key), set `MODEL_PRICES` from Meta's pricing page, record the demo video and link it in the README, and delete the "Review test (delete me)" project from the live database.
