@@ -29,8 +29,17 @@ test("a signed-out visitor goes from the landing page to the Demo Mode project i
 });
 
 test("Try Demo Mode paints a progress page at once, and a returning guest reuses their project", async ({ page }) => {
+  // Hold the seed request until the progress page has been seen, so a fast seed cannot race past it.
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/demo", async (route) => {
+    await held;
+    await route.continue();
+  });
   await page.goto("/demo/starting");
   await expect(page.getByRole("heading", { name: "Setting up your demo project…" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Progress" })).toBeVisible();
+  release();
   await page.waitForURL(/\/projects\/[0-9a-f-]{36}$/);
   const first = page.url();
   // Same browser, same guest cookie: no second seed, same project, and no guest allowance used.
