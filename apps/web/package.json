@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
-    "clip": "node scripts/record-landing-clip.mjs"
+    "clip": "node scripts/record-landing-clip.mjs",
+    "screenshots": "node scripts/readme-screenshots.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1149.0",

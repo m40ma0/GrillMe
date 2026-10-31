@@ -52,7 +52,7 @@ export const ModelEnv = z.object({
   EMBED_MODEL: optionalString,
   EMBED_DIM: z.preprocess(empty, z.coerce.number().int().positive().optional()),
   /** How the adapter asks for JSON. Confirm what the API supports in its docs. */
-  META_RESPONSE_FORMAT: z.preprocess(empty, z.enum(["json_schema", "json_object", "none"]).default("json_object")),
+  META_RESPONSE_FORMAT: z.preprocess(empty, z.enum(["json_schema", "json_object", "none"]).default("json_schema")),
   /** Force mocked model adapters (Demo Mode) even when keys are present. */
   MODEL_MOCK: z.preprocess(empty, bool.default(false)),
   /** Demo Mode projects call the real Meta models (scripted speech and fixtures stay). Defaults to true in production. */
@@ -83,8 +83,25 @@ const BaseEnv = z
 /** Values copied from .env.example that must never reach production. */
 const PLACEHOLDER = /^replace-with-/;
 
-function productionChecks(env: { NODE_ENV: string; AUTH_SECRET?: string; REALTIME_JWT_SECRET?: string; REALTIME_URL?: string; WEB_ORIGIN?: string }, ctx: z.RefinementCtx) {
+function productionChecks(
+  env: {
+    NODE_ENV: string;
+    AUTH_SECRET?: string;
+    REALTIME_JWT_SECRET?: string;
+    REALTIME_URL?: string;
+    WEB_ORIGIN?: string;
+    VISION_SERVICE_URL?: string | undefined;
+    VISION_SERVICE_TOKEN?: string | undefined;
+  },
+  ctx: z.RefinementCtx,
+) {
   if (env.NODE_ENV !== "production") return;
+  if (env.VISION_SERVICE_URL && !env.VISION_SERVICE_TOKEN)
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["VISION_SERVICE_TOKEN"],
+      message: "Set VISION_SERVICE_TOKEN in production (the same value as in the vision service's environment), so the vision service only serves Stage Ready.",
+    });
   for (const key of ["AUTH_SECRET", "REALTIME_JWT_SECRET"] as const) {
     if (env[key] !== undefined && PLACEHOLDER.test(env[key]))
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [key], message: `${key} is still the .env.example placeholder. Generate one with: openssl rand -base64 32` });
@@ -122,7 +139,7 @@ export const WorkerEnv = BaseEnv.extend({
   GITHUB_API_URL: z.preprocess(empty, z.string().url().default("https://api.github.com")),
   /** x264 preset for Director renders. */
   FFMPEG_PRESET: z.preprocess(empty, z.enum(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium"]).default("veryfast")),
-});
+}).superRefine(productionChecks);
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 
 export const RealtimeEnv = z

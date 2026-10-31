@@ -120,7 +120,25 @@ if (env.META_RESPONSE_FORMAT !== "json_schema") {
   }
 }
 
+record("Muse Voice Transcribe", null, "not used: live speech stays on faster-whisper (word timestamps), so there is nothing to check");
+
 const failed = rows.filter((r) => r.ok === false && !r.check.includes("optional"));
+const passed = (name: string) => rows.some((r) => r.check.startsWith(name) && r.ok === true);
+const jsonSchemaOk = env.META_RESPONSE_FORMAT === "json_schema" ? !failed.length : passed("JSON schema mode");
+// The model settings that worked, ready to paste into .env (and .env.production). The key is never printed.
+const lines = [
+  `META_API_BASE_URL=${env.META_API_BASE_URL}`,
+  "META_API_KEY=<your key>",
+  `META_API_STYLE=${env.META_API_STYLE}`,
+  `MODEL_SPARK=${spark}`,
+  `MODEL_WONDER=${env.MODEL_WONDER && passed("Muse Wonder") ? env.MODEL_WONDER : ""}`,
+  `MODEL_IMAGE=${env.MODEL_IMAGE && passed("Muse Image") ? env.MODEL_IMAGE : ""}`,
+  `MODEL_SAM=${env.MODEL_SAM && passed("SAM") ? env.MODEL_SAM : ""}`,
+  `META_REASONING_EFFORT_SPARK=${reasoningEffort(env).spark}`,
+  `META_REASONING_EFFORT_WONDER=${reasoningEffort(env).wonder}`,
+  `META_RESPONSE_FORMAT=${jsonSchemaOk ? "json_schema" : "json_object"}`,
+];
+console.info(`\nSettings to use (paste into .env and .env.production):\n${lines.join("\n")}`);
 console.info(
   `\n${failed.length === 0 ? "All required checks passed. Restart pnpm dev to use the Meta Model API." : `${failed.length} required check(s) failed. Send me the FAIL lines above (they contain no key).`}`,
 );

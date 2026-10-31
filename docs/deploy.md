@@ -145,7 +145,7 @@ What to know:
    AUTH_GITHUB_SECRET=
    VISION_SERVICE_URL=
    VISION_SERVICE_TOKEN=
-   MODEL_API_KEY=
+   META_API_KEY=
    META_API_BASE_URL=https://api.meta.ai/v1
    META_API_STYLE=responses
    MODEL_SPARK=muse-spark-1.3
@@ -159,7 +159,7 @@ What to know:
    DEMO_DAILY_CALL_LIMIT=1500
    ```
 
-   `PUBLIC_HOST` sets `AUTH_URL`, `REALTIME_URL` and `WEB_ORIGIN`; `NODE_ENV` and `REDIS_URL` are set in the image. Then store it in Modal:
+   `PUBLIC_HOST` sets `AUTH_URL`, `REALTIME_URL` and `WEB_ORIGIN`; `NODE_ENV` and `REDIS_URL` are set in the image. `MODEL_API_KEY` is still accepted in place of `META_API_KEY`. `VISION_SERVICE_TOKEN` is required in production and must match the one in the `stage-ready-vision` Modal secret; the deployed vision service refuses every request without it. Add `MODEL_PRICES` (JSON from Meta's pricing page) to show real costs and enforce the dollar budget. Then store it in Modal:
 
    ```bash
    modal secret create stage-ready-app --from-dotenv .env.production

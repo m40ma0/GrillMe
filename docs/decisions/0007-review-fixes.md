@@ -57,3 +57,14 @@ One migration: `0007_review_phase4.sql` (`projects.pre_pitch_brief`).
 **Not built: Muse Voice Transcribe for live speech and Muse Image `/images/edits` for evidence slides.** Both need Meta Model API endpoints whose request and response formats are not in the docs this project has (a realtime ASR WebSocket; an image-edit request with a source image and mask). The build rules forbid guessing endpoints, and both are on the review's cut list. Live speech stays on faster-whisper; evidence slides stay deterministic, verified by Muse Spark vision.
 
 Tests: per-prompt effort and claim-verify images (ai, against recorded replies), the allowance for hosted SAM (ai, realtime), mismatch confirmation yes / no / failure (realtime), the brief's schema and grounding (ai), and the Q&A Kit e2e checks the brief appears.
+
+## Phase 5 · Configuration and setup
+
+1. `META_RESPONSE_FORMAT` defaults to `json_schema` in the zod schema, `.env.example` and `docs/deploy.md` (Meta's structured-output docs describe only that); `json_object` stays an opt-in fallback.
+2. `.env.example` no longer lists settings nothing reads (`MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `EMBED_MODEL`, `EMBED_DIM`, `MODEL_STT`, `MODEL_TTS`, `OBS_WS_URL`, `OBS_WS_PASSWORD`) or the second key name: it shows `META_API_KEY`, and `MODEL_API_KEY` is still accepted in code. It adds `S3_REGION` (with the B2 and R2 values), the demo allowance (`DEMO_LIVE_MODELS`, `DEMO_DAILY_BUDGET_USD`, `DEMO_DAILY_CALL_LIMIT`) and `KEEP_WARM`. `MODEL_PRICES` is documented but left empty: Meta's prices are not in the repo and are not guessed.
+3. In production, web, realtime and the worker refuse to boot when `VISION_SERVICE_URL` is set without `VISION_SERVICE_TOKEN`; the deployed vision service (`VISION_REQUIRE_TOKEN=1` in `modal_app.py`) answers 503 to every request while its token is unset, instead of serving anyone. Local runs keep the open default.
+4. `pnpm ai:check` ends with the settings that worked, ready to paste (the key is never printed). Muse Voice Transcribe is reported as not used (see Phase 4).
+
+## Phase 6 · README for judges
+
+The README now leads with the pitch, the live link and the product clip, a three-image strip (Studio, Q&A Kit, DemoGuard switch; `pnpm --filter @stage-ready/web screenshots` retakes them from Demo Mode), a table of how each Meta model is used and where in code, an architecture diagram, the features, what is real and what is scripted in Demo Mode, local setup, deploy, tests and CI, decisions, team and licence (MIT, `LICENSE`). The milestone history and the M0 upgrade note moved to `docs/history.md`.

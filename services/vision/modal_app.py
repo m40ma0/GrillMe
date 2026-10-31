@@ -29,6 +29,8 @@ image = (
     .apt_install("ffmpeg", "fonts-dejavu-core")
     .pip_install_from_requirements("requirements.txt")
     .env(WHISPER)
+    # Deployed: never serve without the shared token (it comes from the stage-ready-vision secret).
+    .env({"VISION_REQUIRE_TOKEN": "1"})
     .add_local_python_source("app")
 )
 

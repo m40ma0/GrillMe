@@ -46,7 +46,10 @@ def whisper() -> Model:
 
 
 def check_token(authorization: str | None) -> None:
-    token = settings().token
+    s = settings()
+    token = s.token
+    if not token and s.require_token:
+        raise HTTPException(status_code=503, detail="VISION_SERVICE_TOKEN is not set on the vision service; it refuses requests until it is.")
     if token and authorization != f"Bearer {token}":
         raise HTTPException(status_code=401, detail="Invalid vision service token.")
 
@@ -153,8 +156,9 @@ def render_status(job_id: str, authorization: str | None = Header(default=None))
 
 @app.websocket("/stt")
 async def stt(socket: WebSocket) -> None:
-    token = settings().token
-    if token and socket.headers.get("authorization") != f"Bearer {token}":
+    s = settings()
+    token = s.token
+    if (not token and s.require_token) or (token and socket.headers.get("authorization") != f"Bearer {token}"):
         await socket.close(code=4401)
         return
     await socket.accept()

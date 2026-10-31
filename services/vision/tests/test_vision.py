@@ -70,3 +70,20 @@ def test_health_and_track_without_sam():
     client = TestClient(main.app)
     assert client.get("/api/health").json()["tracker"] == "none"
     assert client.post("/track", content=jpeg(True), headers={"content-type": "image/jpeg"}).status_code == 503
+
+
+def test_a_deployed_service_without_a_token_refuses_requests(monkeypatch):
+    from app import main
+
+    client = TestClient(main.app)
+    monkeypatch.delenv("VISION_SERVICE_TOKEN", raising=False)
+    monkeypatch.setenv("VISION_REQUIRE_TOKEN", "1")
+    refused = client.post("/thumbnail", json={"source": "https://x.test/a.webm", "output": "https://x.test/b.jpg"})
+    assert refused.status_code == 503
+    assert "VISION_SERVICE_TOKEN" in refused.json()["detail"]
+    monkeypatch.setenv("VISION_SERVICE_TOKEN", "secret")
+    assert client.post("/thumbnail", json={"source": "https://x.test/a.webm", "output": "https://x.test/b.jpg"}).status_code == 401
+    # Locally (no VISION_REQUIRE_TOKEN), an unset token still means an open service, as before.
+    monkeypatch.delenv("VISION_REQUIRE_TOKEN")
+    monkeypatch.delenv("VISION_SERVICE_TOKEN")
+    assert client.get("/api/health").status_code == 200

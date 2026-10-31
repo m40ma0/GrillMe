@@ -18,7 +18,8 @@ describe("env validation", () => {
     const env = parseEnv("worker", WorkerEnv, { ...base, META_API_KEY: "", MODEL_SPARK: "", EMBED_DIM: "" });
     expect(env.META_API_KEY).toBeUndefined();
     expect(env.EMBED_DIM).toBeUndefined();
-    expect(env.META_RESPONSE_FORMAT).toBe("json_object");
+    // Meta's structured-output docs describe json_schema, so it is the default.
+    expect(env.META_RESPONSE_FORMAT).toBe("json_schema");
   });
   it("names every missing value", () => {
     expect(() => parseEnv("worker", WorkerEnv, {})).toThrow(ConfigError);
@@ -38,6 +39,13 @@ describe("env validation", () => {
     expect(() => parseEnv("realtime", RealtimeEnv, { ...prod, REALTIME_JWT_SECRET: "replace-with-a-long-random-value", WEB_ORIGIN: "https://app.example.com" })).toThrow(/REALTIME_JWT_SECRET/);
     expect(() => parseEnv("realtime", RealtimeEnv, prod)).toThrow(/WEB_ORIGIN/);
     expect(parseEnv("realtime", RealtimeEnv, { ...prod, WEB_ORIGIN: "https://app.example.com" }).WEB_ORIGIN).toBe("https://app.example.com");
+  });
+  it("requires the vision-service token in production when a vision service is set", () => {
+    const prod = { ...base, NODE_ENV: "production", AUTH_GITHUB_ID: "id", AUTH_GITHUB_SECRET: "secret", REALTIME_URL: "wss://rt.example.com", VISION_SERVICE_URL: "https://vision.example.com" };
+    expect(() => parseEnv("web", WebEnv, prod)).toThrow(/VISION_SERVICE_TOKEN/);
+    expect(() => parseEnv("worker", WorkerEnv, prod)).toThrow(/VISION_SERVICE_TOKEN/);
+    expect(parseEnv("worker", WorkerEnv, { ...prod, VISION_SERVICE_TOKEN: "t" }).VISION_SERVICE_TOKEN).toBe("t");
+    expect(parseEnv("worker", WorkerEnv, { ...base, VISION_SERVICE_URL: "http://localhost:8000" }).VISION_SERVICE_TOKEN).toBeUndefined();
   });
 });
 
